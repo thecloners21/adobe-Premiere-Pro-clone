@@ -234,14 +234,31 @@ foreach (array_reverse($videoTracks) as $t)         // dal basso verso l'alto
     if ($t !== $mainTrack && !empty($t['clips']) && empty($t['mute'])) $upper[] = $t;
 
 foreach ($upper as $t) {
-    foreach ($t['clips'] as $c) {
+    $clips = $t['clips'];
+    usort($clips, fn($a, $b) => $a['start'] <=> $b['start']);
+    foreach ($clips as $idx => $c) {
         $m = $mediaById[$c['mediaId']] ?? null; if (!$m) continue;
-        $S = (float)$c['start']; $E = $S + ((float)$c['out'] - (float)$c['in']);
+        $S = (float)$c['start']; $segDur = (float)$c['out'] - (float)$c['in']; $E = $S + $segDur;
         $seg = $buildClip($c, $m, true);
-        $shift = 'sh' . ($lblSeq++);
-        $fc[] = "[{$seg}]setpts=PTS+{$n($S)}/TB[{$shift}]";
+
+        // cross-dissolve con i vicini sovrapposti sulla stessa traccia (alpha fade)
+        $fades = [];
+        if ($idx > 0) {
+            $prev = $clips[$idx - 1];
+            $ovIn = ($prev['start'] + ((float)$prev['out'] - (float)$prev['in'])) - $S;
+            if ($ovIn > 0.02) $fades[] = "fade=t=in:st=0:d={$n($ovIn)}:alpha=1";
+        }
+        if ($idx < count($clips) - 1) {
+            $next = $clips[$idx + 1];
+            $ovOut = $E - (float)$next['start'];
+            if ($ovOut > 0.02) $fades[] = "fade=t=out:st={$n($segDur - $ovOut)}:d={$n($ovOut)}:alpha=1";
+        }
+        $shifted = 'sh' . ($lblSeq++);
+        $chain = "[{$seg}]" . (count($fades) ? implode(',', $fades) . ',' : '') . "setpts=PTS+{$n($S)}/TB[{$shifted}]";
+        $fc[] = $chain;
+
         $out = 'ov' . ($lblSeq++);
-        $fc[] = "[{$base}][{$shift}]overlay=eof_action=pass:enable='between(t,{$n($S)},{$n($E)})'[{$out}]";
+        $fc[] = "[{$base}][{$shifted}]overlay=eof_action=pass:enable='between(t,{$n($S)},{$n($E)})'[{$out}]";
         $base = $out;
     }
 }
