@@ -72,19 +72,51 @@ foreach ($project['tracks'] as $t) {
 }
 
 /* ----- catena effetti per una clip ----- */
-$efx = function(array $c) use ($n): array {
+$efx = function(array $c) use ($n, $W, $H): array {
     $fx = $c['fx'] ?? [];
     $g = fn($k, $d = 0) => (float)($fx[$k] ?? $d);
+    // un parametro keyframato? (almeno un keyframe nell'array)
+    $hasKf = fn($k) => is_array($c['kf'][$k] ?? null) && count($c['kf'][$k]) > 0;
+    /* espressione ffmpeg tempo-variante (virgole escapate per il filtergraph);
+       se non ci sono keyframe restituisce il valore statico. $map trasforma il valore. */
+    $kf = function($key, $map = null) use ($c, $g, $n, $hasKf) {
+        $map = $map ?? fn($v) => $v;
+        if (!$hasKf($key)) return $n($map($g($key)));
+        $a = $c['kf'][$key];
+        usort($a, fn($x, $y) => $x['t'] <=> $y['t']);
+        $cnt = count($a);
+        if ($cnt === 1) return $n($map((float)$a[0]['v']));
+        $expr = $n($map((float)$a[$cnt - 1]['v']));        // dopo l'ultimo keyframe
+        for ($i = $cnt - 2; $i >= 0; $i--) {
+            $t0 = $n((float)$a[$i]['t']);   $t1 = $n((float)$a[$i + 1]['t']);
+            $v0 = $n($map((float)$a[$i]['v'])); $v1 = $n($map((float)$a[$i + 1]['v']));
+            $seg = "($v0+($v1-$v0)*(t-$t0)/($t1-$t0))";
+            $expr = "if(lt(t\\,$t1)\\,$seg\\,$expr)";
+        }
+        return "if(lt(t\\," . $n((float)$a[0]['t']) . ")\\," . $n($map((float)$a[0]['v'])) . "\\,$expr)";
+    };
+
     $f = [];
     if (!empty($fx['flipH'])) $f[] = 'hflip';
     if (!empty($fx['flipV'])) $f[] = 'vflip';
-    $rot = $g('rotation');
-    if (abs($rot) > 0.01) $f[] = 'rotate=' . $n($rot * M_PI / 180) . ':ow=rotw(' . $n($rot * M_PI / 180) . '):oh=roth(' . $n($rot * M_PI / 180) . '):c=black@0';
-    $b = $g('brightness') + $g('exposure') * 0.3;
-    if (abs($b) > 0.001 || abs($g('contrast')) > 0.001 || abs($g('saturation')) > 0.001)
-        $f[] = 'eq=brightness=' . $n($b) . ':contrast=' . $n(1 + $g('contrast')) . ':saturation=' . $n(1 + $g('saturation'));
+    if (abs($g('rotation')) > 0.01 || $hasKf('rotation')) {
+        $aexpr = $kf('rotation', fn($v) => $v * M_PI / 180);
+        $f[] = "rotate=a=$aexpr:ow=$W:oh=$H:c=black@0";
+    }
+    $anyEq = abs($g('brightness')) > 0.001 || abs($g('exposure')) > 0.001 || abs($g('contrast')) > 0.001 || abs($g('saturation')) > 0.001
+          || $hasKf('brightness') || $hasKf('exposure') || $hasKf('contrast') || $hasKf('saturation');
+    if ($anyEq) {
+        $bexpr = "(" . $kf('brightness') . "+(" . $kf('exposure') . ")*0.3)";
+        $cexpr = "(1+(" . $kf('contrast') . "))";
+        $sexpr = "(1+(" . $kf('saturation') . "))";
+        $f[] = "eq=eval=frame:brightness=$bexpr:contrast=$cexpr:saturation=$sexpr";
+    }
     $h = $g('hue'); $gray = $g('grayscale');
-    if (abs($h) > 0.01 || $gray > 0.01) $f[] = 'hue=h=' . $n($h) . ':s=' . $n(1 - $gray);
+    if (abs($h) > 0.01 || $gray > 0.01 || $hasKf('hue') || $hasKf('grayscale')) {
+        $hexpr = $kf('hue');
+        $sexpr = "(1-(" . $kf('grayscale') . "))";
+        $f[] = "hue=h=$hexpr:s=$sexpr:eval=frame";
+    }
     $tm = $g('temperature'); $ti = $g('tint');
     if (abs($tm) > 0.01 || abs($ti) > 0.01) $f[] = 'colorbalance=rm=' . $n($tm * 0.3) . ':bm=' . $n(-$tm * 0.3) . ':gm=' . $n($ti * 0.3);
     if ($g('blur') > 0.01) $f[] = 'boxblur=' . $n($g('blur') * 4) . ':1';

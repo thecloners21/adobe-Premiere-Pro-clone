@@ -47,7 +47,7 @@ Toggle 🌙/☀️ in topbar; `data-theme="dark|light"` su `<html>`, override va
 
 ## Limiti noti — onestà tecnica
 - Un **clone perfetto** di Premiere non è l'obiettivo: editor funzionante con le funzioni core.
-- **Fedeltà export**: il render **browser** (MediaRecorder) cattura il preview reale → onora *tutti* gli effetti, le transizioni su ogni traccia e i keyframe. Il render **server (ffmpeg)** è massima qualità ma: `xfade` solo sulla traccia principale (le tracce superiori sono in overlay), effetti applicati col valore base (keyframe non interpolati lato server), transform parziale (scala/rotazione sì, offset XY centrato).
+- **Fedeltà export**: il render **browser** (MediaRecorder) cattura il preview reale → onora *tutti* gli effetti, le transizioni su ogni traccia e i keyframe. Il render **server (ffmpeg)**: `xfade` solo sulla traccia principale (le tracce superiori sono in overlay). I **keyframe sono interpolati lato server** per luminosità/contrasto/saturazione/esposizione/tonalità/B&N/rotazione (espressioni tempo-varianti `eq eval=frame`/`hue`/`rotate`); opacità/scala/posizione keyframate restano browser-only. Offset XY transform centrato.
 - Un solo elemento video per media in preview (clip multiple dallo stesso media in parallelo: futuro).
 - `.prproj` nativo (binario gzip proprietario) e AAF non supportati per scelta; interscambio via EDL/FCPXML.
 - WebCodecs come upgrade di precisione del seek (ora si usano elementi `<video>`).
