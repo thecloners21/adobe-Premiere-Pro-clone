@@ -40,20 +40,40 @@ export function makeClip(media, start, trackType) {
     transType: 'dissolve',    // tipo transizione in entrata (quando sovrapposta alla precedente)
     fx: defaultFx(),
     kf: {},                   // keyframe per parametro: { key: [{t,v}, ...] } (t = secondi dall'inizio clip)
+    ease: {},                 // easing per parametro keyframato: { key: 'linear'|'in'|'out'|'inout'|'hold' }
   };
 }
 
-/* valuta un parametro fx tenendo conto dei keyframe; localT = secondi dall'inizio clip */
+/* curve di easing per i keyframe */
+export const EASINGS = [
+  { key: 'linear', label: 'Lineare' },
+  { key: 'in',     label: 'Ease In' },
+  { key: 'out',    label: 'Ease Out' },
+  { key: 'inout',  label: 'Ease In/Out' },
+  { key: 'hold',   label: 'Hold (a scatti)' },
+];
+export function applyEase(p, e) {
+  switch (e) {
+    case 'in':    return p * p;
+    case 'out':   return 1 - (1 - p) * (1 - p);
+    case 'inout': return p * p * (3 - 2 * p);
+    case 'hold':  return 0;            // resta sul valore precedente fino al keyframe
+    default:      return p;            // linear
+  }
+}
+
+/* valuta un parametro fx tenendo conto dei keyframe + easing; localT = secondi dall'inizio clip */
 export function evalParam(clip, key, localT) {
   const kfs = clip.kf && clip.kf[key];
   if (kfs && kfs.length) {
     if (localT <= kfs[0].t) return kfs[0].v;
     if (localT >= kfs[kfs.length - 1].t) return kfs[kfs.length - 1].v;
+    const ease = (clip.ease && clip.ease[key]) || 'linear';
     for (let i = 0; i < kfs.length - 1; i++) {
       const a = kfs[i], b = kfs[i + 1];
       if (localT >= a.t && localT <= b.t) {
         const p = (localT - a.t) / Math.max(1e-6, b.t - a.t);
-        return a.v + (b.v - a.v) * p;   // interpolazione lineare
+        return a.v + (b.v - a.v) * applyEase(p, ease);
       }
     }
   }
@@ -134,7 +154,7 @@ class Store {
         const cEnd = c.start + (c.out - c.in);
         if (t0 > c.start + 0.02 && t0 < cEnd - 0.02) {
           const cutSrc = c.in + (t0 - c.start);
-          const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})) };
+          const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})), ease: { ...(c.ease || {}) } };
           right.start = t0; right.in = cutSrc;
           c.out = cutSrc;
           t.clips.push(right);

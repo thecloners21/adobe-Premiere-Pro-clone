@@ -2,7 +2,7 @@
    inspector.js — pannello "Controllo effetti": effetti raggruppati,
    keyframe, transizioni, flip, editor titoli, audio.
    ===================================================================== */
-import { store, tc, evalParam } from './state.js';
+import { store, tc, evalParam, EASINGS } from './state.js';
 import { FX_PARAMS, FX_GROUPS, TRANSITIONS } from './effects.js';
 import { updateTitle } from './media.js';
 
@@ -41,13 +41,19 @@ function fxGroup(clip, group) {
   let rows = '';
   for (const def of params) {
     const v = evalParam(clip, def.key, localT(clip));
-    const on = clip.kf && clip.kf[def.key] && clip.kf[def.key].length ? ' on' : '';
+    const kfd = clip.kf && clip.kf[def.key] && clip.kf[def.key].length;
+    const on = kfd ? ' on' : '';
     rows += `<div class="fx-row kf-row">
         <label>${def.label}</label>
         <button class="kf-btn${on}" data-kf="${def.key}" title="Keyframe al playhead">◆</button>
         <input type="range" data-scope="fx" data-k="${def.key}" min="${def.min}" max="${def.max}" step="${def.step}" value="${v}">
         <span class="val">${fmt(v)}</span>
       </div>`;
+    if (kfd) {
+      const cur = (clip.ease && clip.ease[def.key]) || 'linear';
+      const opts = EASINGS.map(e => `<option value="${e.key}" ${cur === e.key ? 'selected' : ''}>${e.label}</option>`).join('');
+      rows += `<div class="fx-ease"><span>↳ accelerazione</span><select data-ease="${def.key}">${opts}</select></div>`;
+    }
   }
   return `<div class="fx-group"><div class="fx-title">${group}</div>${rows}</div>`;
 }
@@ -120,6 +126,12 @@ function wire(clip, m, track) {
       store.emit('inspector');
     });
   });
+  // easing keyframe
+  box.querySelectorAll('[data-ease]').forEach(sel => sel.addEventListener('change', () => {
+    if (!clip.ease) clip.ease = {};
+    clip.ease[sel.dataset.ease] = sel.value;
+    store.emit('inspector');
+  }));
   // flip
   box.querySelectorAll('[data-flip]').forEach(b => b.addEventListener('click', () => {
     const k = b.dataset.flip; clip.fx[k] = clip.fx[k] ? 0 : 1; b.classList.toggle('on'); store.emit('inspector');

@@ -99,6 +99,10 @@ Tra due keyframe il valore viene **interpolato** automaticamente (es. una
 dissolvenza di opacità, un movimento, uno zoom). Il diamante diventa azzurro
 quando il parametro è animato.
 
+Sotto un parametro animato compare **↳ accelerazione**: scegli la curva
+(Lineare, Ease In, Ease Out, Ease In/Out, Hold a scatti) per dare un movimento
+più morbido o meccanico, come in Premiere.
+
 > I keyframe sono resi al 100% nell'export **browser**. Nell'export server viene
 > usato il valore base (vedi §10).
 

@@ -260,6 +260,9 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 }
 .kf-btn:hover { color: var(--text); }
 .kf-btn.on { color: var(--accent); text-shadow: 0 0 6px var(--accent); }
+.fx-ease { display: flex; align-items: center; gap: 8px; margin: -2px 0 8px 88px; }
+.fx-ease span { font-size: 10px; color: var(--text-mute); }
+.fx-ease select { flex: 1; padding: 3px 6px; font-size: 10.5px; background: #2a2a30; color: var(--text-dim); border: 1px solid var(--line-soft); border-radius: 4px; }
 .toggle-row { display: flex; gap: 6px; margin-bottom: 8px; }
 .toggle-row .tg, .toggle-row select {
   flex: 1; padding: 5px 6px; font-size: 11px; border-radius: 5px;

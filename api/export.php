@@ -86,11 +86,22 @@ $efx = function(array $c) use ($n, $W, $H): array {
         usort($a, fn($x, $y) => $x['t'] <=> $y['t']);
         $cnt = count($a);
         if ($cnt === 1) return $n($map((float)$a[0]['v']));
+        $ease = $c['ease'][$key] ?? 'linear';
+        $easeExpr = function($frac) use ($ease) {
+            switch ($ease) {
+                case 'in':    return "($frac*$frac)";
+                case 'out':   return "(1-(1-$frac)*(1-$frac))";
+                case 'inout': return "($frac*$frac*(3-2*$frac))";
+                case 'hold':  return "0";
+                default:      return $frac;
+            }
+        };
         $expr = $n($map((float)$a[$cnt - 1]['v']));        // dopo l'ultimo keyframe
         for ($i = $cnt - 2; $i >= 0; $i--) {
             $t0 = $n((float)$a[$i]['t']);   $t1 = $n((float)$a[$i + 1]['t']);
             $v0 = $n($map((float)$a[$i]['v'])); $v1 = $n($map((float)$a[$i + 1]['v']));
-            $seg = "($v0+($v1-$v0)*(t-$t0)/($t1-$t0))";
+            $eased = $easeExpr("((t-$t0)/($t1-$t0))");
+            $seg = "($v0+($v1-$v0)*$eased)";
             $expr = "if(lt(t\\,$t1)\\,$seg\\,$expr)";
         }
         return "if(lt(t\\," . $n((float)$a[0]['t']) . ")\\," . $n($map((float)$a[0]['v'])) . "\\,$expr)";
