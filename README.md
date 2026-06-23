@@ -8,8 +8,12 @@ render finale con **ffmpeg** (server) e **fallback nel browser** (offline).
 > software libero ispirato ai grandi classici.
 
 ## ▶️ Demo online
-**<!-- DEMO_URL -->** *(l'editor gira anche su GitHub Pages; le funzioni che
-richiedono PHP — salva/apri sul server, render ffmpeg — usano il fallback browser)*
+👉 **https://dplusos21.github.io/adobe-Premiere-Pro-clone/**
+
+*(l'editor gira anche su GitHub Pages; le funzioni che richiedono PHP — salva/apri
+sul server, render ffmpeg — usano automaticamente il fallback nel browser.
+Dopo il trasferimento del repo all'org, la demo sarà su
+`https://thecloners21.github.io/adobe-Premiere-Pro-clone/`.)*
 
 ## ✨ Funzioni
 - **Timeline multitraccia**: drag & drop, trim, taglio, spostamento, snap, zoom.
