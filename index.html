@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClonePremiere — Web Video Editor</title>
+<link rel="stylesheet" href="assets/css/editor.css">
+</head>
+<body>
+
+<!-- ===== Top bar ===== -->
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">Pr</span>
+    <span class="brand-name">ClonePremiere</span>
+  </div>
+  <nav class="menu">
+    <button data-act="new">Nuovo</button>
+    <button data-act="import">Importa media</button>
+    <button data-act="title">Titolo</button>
+    <button data-act="save">Salva</button>
+    <button data-act="open">Apri…</button>
+    <button data-act="projExport">Esporta progetto</button>
+    <button data-act="projImport">Importa progetto</button>
+    <button data-act="export" class="primary">Esporta video ▾</button>
+  </nav>
+  <div class="topbar-right">
+    <span id="projName" class="proj-name" contenteditable="true" spellcheck="false">Progetto senza titolo</span>
+    <button id="themeToggle" class="icon-btn" title="Cambia tema chiaro/scuro">🌙</button>
+    <span id="engineBadge" class="badge" title="Motore di export disponibile">…</span>
+  </div>
+</header>
+
+<input type="file" id="fileInput" accept="video/*,audio/*,image/*" multiple hidden>
+<input type="file" id="projInput" accept=".cpproj,.fcpxml,.xml,.edl,application/json,application/xml" hidden>
+
+<!-- ===== Workspace ===== -->
+<main class="workspace">
+
+  <!-- Left: media bin -->
+  <section class="panel bin">
+    <div class="panel-head">Media <span id="binCount" class="muted">0</span></div>
+    <div id="binList" class="bin-list">
+      <div class="empty">Trascina qui i file<br>o premi <b>Importa media</b></div>
+    </div>
+  </section>
+
+  <!-- Center: program monitor -->
+  <section class="panel monitor">
+    <div class="panel-head">
+      Programma
+      <span id="tcDisplay" class="tc">00:00:00:00</span>
+    </div>
+    <div class="monitor-stage">
+      <canvas id="preview" width="1280" height="720"></canvas>
+    </div>
+    <div class="transport">
+      <button data-tp="start" title="Inizio">⏮</button>
+      <button data-tp="back" title="-1 frame">◀</button>
+      <button data-tp="play" id="playBtn" class="play" title="Play/Pausa">▶</button>
+      <button data-tp="fwd" title="+1 frame">▶</button>
+      <button data-tp="end" title="Fine">⏭</button>
+      <span class="sep"></span>
+      <button data-tp="split" title="Taglia clip al playhead (S)">✂ Taglia</button>
+      <button data-tp="del" title="Elimina clip selezionata (Canc)">🗑</button>
+    </div>
+  </section>
+
+  <!-- Right: inspector / effects -->
+  <section class="panel inspector">
+    <div class="panel-head">Controllo effetti</div>
+    <div id="inspector" class="inspector-body">
+      <div class="empty">Seleziona una clip<br>per regolarne gli effetti</div>
+    </div>
+  </section>
+</main>
+
+<!-- ===== Timeline ===== -->
+<section class="timeline-wrap">
+  <div class="timeline-toolbar">
+    <span class="tl-title">Timeline</span>
+    <label class="zoom">Zoom
+      <input type="range" id="zoom" min="20" max="400" value="100">
+    </label>
+    <span class="spacer"></span>
+    <span id="durDisplay" class="muted">Durata 00:00:00:00</span>
+  </div>
+  <div class="timeline" id="timeline">
+    <div class="tl-ruler-row">
+      <div class="track-head ruler-head"></div>
+      <div class="tl-ruler" id="ruler"></div>
+    </div>
+    <div class="tl-tracks" id="tracks"><!-- tracce iniettate da JS --></div>
+    <div class="tl-playhead" id="playhead"></div>
+  </div>
+</section>
+
+<!-- ===== Export dialog ===== -->
+<div class="modal" id="exportModal" hidden>
+  <div class="modal-card">
+    <h3>Esporta video</h3>
+    <div class="row">
+      <label>Risoluzione</label>
+      <select id="expRes">
+        <option value="1920x1080">1920×1080 (Full HD)</option>
+        <option value="1280x720" selected>1280×720 (HD)</option>
+        <option value="854x480">854×480 (SD)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Formato</label>
+      <select id="expFmt">
+        <option value="mp4">MP4 (H.264)</option>
+        <option value="webm">WebM (VP9)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Motore</label>
+      <select id="expEngine">
+        <option value="auto" selected>Automatico (server se disponibile)</option>
+        <option value="server">Server (ffmpeg, qualità piena)</option>
+        <option value="wasm">Browser (MediaRecorder, tempo reale)</option>
+      </select>
+    </div>
+    <div id="expProgress" class="progress" hidden><div class="bar"></div><span class="lbl">0%</span></div>
+    <div class="modal-actions">
+      <button data-modal="cancel">Annulla</button>
+      <button data-modal="go" class="primary">Avvia render</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="assets/js/main.js"></script>
+</body>
+</html>

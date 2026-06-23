@@ -1,0 +1,14 @@
+# media caricati e render (contenuti utente, non versionati)
+uploads/*
+renders/*
+!uploads/.gitkeep
+!renders/.gitkeep
+
+# database progetti
+data/*.sqlite
+data/*.sqlite-journal
+
+# sistema
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,228 @@
+/* =====================================================================
+   preview.js — motore di riproduzione: clock, compositing WebGL delle
+   tracce video, sincronizzazione audio, transport, playhead.
+   ===================================================================== */
+import { store, tc, resolvedParams } from './state.js';
+import { runtime } from './media.js';
+import { audio } from './audio.js';
+import { GLCompositor } from './effects.js';
+
+export const THEAD_W = 150;
+
+const canvas = document.getElementById('preview');
+const playBtn = document.getElementById('playBtn');
+const tcDisplay = document.getElementById('tcDisplay');
+const durDisplay = document.getElementById('durDisplay');
+const timelineEl = document.getElementById('timeline');
+const playheadEl = document.getElementById('playhead');
+
+const comp = new GLCompositor(canvas);
+
+let anchorPerf = 0;    // performance.now() al via (clock indipendente dall'audio)
+let anchorHead = 0;    // playhead al via
+
+/* mantiene un solo elemento per media; se serve più istanze, future-work */
+function elementFor(mediaId) {
+  const rt = runtime.get(mediaId);
+  return rt ? rt.element : null;
+}
+function bufferFor(mediaId) {
+  const rt = runtime.get(mediaId);
+  return rt ? rt.audioBuffer : null;
+}
+
+/* ----------------- transport ----------------- */
+export function play() {
+  if (store.playing) return;
+  if (store.playhead >= store.duration() - 0.01) store.playhead = 0;
+  store.playing = true;
+  audio.resume();
+  anchorPerf = performance.now();
+  anchorHead = store.playhead;
+
+  // sincronizza mute tracce audio
+  for (const t of store.audioTracks()) audio.setTrackMuted(t.id, t.mute);
+  // schedula audio
+  const clips = [];
+  for (const t of store.audioTracks()) {
+    if (t.mute) continue;
+    for (const c of t.clips) clips.push({ trackId: t.id, clip: c });
+  }
+  audio.play(clips, bufferFor, store.playhead);
+
+  // avvia gli elementi video attivi
+  syncVideoElements(store.playhead, true);
+
+  playBtn.classList.add('on');
+  playBtn.textContent = '⏸';
+  store.emit('play');
+}
+
+export function pause() {
+  if (!store.playing) return;
+  store.playing = false;
+  audio.stopAll();
+  for (const m of store.project.media) {
+    const el = elementFor(m.id);
+    if (el && el.pause) try { el.pause(); } catch (_) {}
+  }
+  playBtn.classList.remove('on');
+  playBtn.textContent = '▶';
+  store.emit('pause');
+}
+
+export function toggle() { store.playing ? pause() : play(); }
+
+export function seek(t) {
+  const d = store.duration();
+  store.playhead = Math.max(0, Math.min(t, d));
+  if (store.playing) { anchorPerf = performance.now(); anchorHead = store.playhead; audioReschedule(); syncVideoElements(store.playhead, true); }
+  else scrub();
+  updatePlayheadUI();
+  store.emit('seek');
+}
+
+export function stepFrame(dir) {
+  pause();
+  seek(store.playhead + dir / store.project.fps);
+}
+export function gotoStart() { pause(); seek(0); }
+export function gotoEnd() { pause(); seek(store.duration()); }
+
+function audioReschedule() {
+  const clips = [];
+  for (const t of store.audioTracks()) {
+    if (t.mute) continue;
+    for (const c of t.clips) clips.push({ trackId: t.id, clip: c });
+  }
+  audio.play(clips, bufferFor, store.playhead);
+}
+
+/* allinea gli elementi video al tempo T (per play o scrub) */
+function syncVideoElements(T, startPlaying) {
+  for (const track of store.project.tracks) {
+    if (track.type !== 'video') continue;
+    const c = store.clipAt(track, T);
+    for (const clip of track.clips) {
+      const el = elementFor(clip.mediaId);
+      if (!el || el.tagName === 'IMG') continue;
+      if (clip === c) {
+        const target = clip.in + (T - clip.start);
+        if (Math.abs((el.currentTime || 0) - target) > 0.25) {
+          try { el.currentTime = target; } catch (_) {}
+        }
+        if (startPlaying) { el.muted = true; el.play().catch(() => {}); }
+      } else if (startPlaying) {
+        try { el.pause(); } catch (_) {}
+      }
+    }
+  }
+}
+
+/* ----------------- render loop ----------------- */
+function currentTime() {
+  if (store.playing) return anchorHead + (performance.now() - anchorPerf) / 1000;
+  return store.playhead;
+}
+
+function renderFrame() {
+  let T = currentTime();
+  const dur = store.duration();
+  if (store.playing) {
+    store.playhead = T;
+    if (T >= dur) { store.playhead = dur; pause(); T = dur; }
+  }
+
+  comp.clear();
+  if (comp.ok) {
+    // compositing dal basso verso l'alto
+    for (const track of store.videoTracksBottomUp()) {
+      if (track.mute) continue;
+      const trans = store.transitionAt(track, T);
+      if (trans) { drawTransition(track, trans, T); continue; }
+      const clip = store.clipAt(track, T);
+      if (clip) drawClip(clip, T, {});
+    }
+  }
+
+  // aggiorna UI
+  tcDisplay.textContent = tc(store.playhead, store.project.fps);
+  durDisplay.textContent = 'Durata ' + tc(dur, store.project.fps);
+  updatePlayheadUI();
+
+  requestAnimationFrame(renderFrame);
+}
+
+/* mantiene un elemento video allineato durante il play */
+function alignEl(el, clip, T) {
+  if (!el || el.tagName === 'IMG' || el.tagName === 'CANVAS') return;
+  const target = clip.in + (T - clip.start);
+  if (store.playing) {
+    if (el.paused) { try { el.currentTime = target; el.muted = true; el.play().catch(() => {}); } catch (_) {} }
+    else if (Math.abs(el.currentTime - target) > 0.35) { try { el.currentTime = target; } catch (_) {} }
+  }
+}
+
+function drawClip(clip, T, opts) {
+  const el = elementFor(clip.mediaId);
+  if (!el) return;
+  alignEl(el, clip, T);
+  const P = resolvedParams(clip, T - clip.start);
+  comp.draw(el, P, opts);
+}
+
+/* rende una transizione reale tra due clip sovrapposte */
+function drawTransition(track, trans, T) {
+  const { A, B, p, type } = trans;
+  const elA = elementFor(A.mediaId), elB = elementFor(B.mediaId);
+  if (!elA || !elB) { drawClip(B, T, {}); return; }
+  alignEl(elA, A, T); alignEl(elB, B, T);
+  const PA = resolvedParams(A, T - A.start), PB = resolvedParams(B, T - B.start);
+
+  switch (type) {
+    case 'dipblack':
+      if (p < 0.5) { comp.draw(elA, PA, {}); comp.fill(0, 0, 0, p / 0.5); }
+      else { comp.draw(elB, PB, {}); comp.fill(0, 0, 0, (1 - p) / 0.5); }
+      break;
+    case 'dipwhite':
+      if (p < 0.5) { comp.draw(elA, PA, {}); comp.fill(1, 1, 1, p / 0.5); }
+      else { comp.draw(elB, PB, {}); comp.fill(1, 1, 1, (1 - p) / 0.5); }
+      break;
+    case 'wipeleft':
+      comp.draw(elA, PA, {}); comp.draw(elB, PB, { wipe: { dir: [1, 0], edge: p } });
+      break;
+    case 'wiperight':
+      comp.draw(elA, PA, {}); comp.draw(elB, PB, { wipe: { dir: [-1, 0], edge: p - 1 } });
+      break;
+    case 'slideleft':
+      comp.draw(elA, PA, {}); comp.draw(elB, PB, { slide: [(1 - p) * 2, 0] });
+      break;
+    case 'slideright':
+      comp.draw(elA, PA, {}); comp.draw(elB, PB, { slide: [-(1 - p) * 2, 0] });
+      break;
+    case 'push':
+      comp.draw(elA, PA, { slide: [-p * 2, 0] }); comp.draw(elB, PB, { slide: [(1 - p) * 2, 0] });
+      break;
+    default: // dissolve
+      comp.draw(elA, PA, {}); comp.draw(elB, PB, { alpha: p });
+  }
+}
+
+/* disegno singolo frame da fermo (scrub) — aspetta il seek poi ridisegna */
+let scrubTimer = null;
+function scrub() {
+  syncVideoElements(store.playhead, false);
+  clearTimeout(scrubTimer);
+  // i seek dei video sono async: ridisegna dopo un attimo
+  scrubTimer = setTimeout(() => {}, 60);
+}
+
+export function updatePlayheadUI() {
+  const x = THEAD_W + store.playhead * store.pxPerSec - timelineEl.scrollLeft;
+  playheadEl.style.left = Math.max(THEAD_W, x) + 'px';
+  playheadEl.style.display = x < THEAD_W - 1 ? 'none' : 'block';
+}
+
+timelineEl.addEventListener('scroll', updatePlayheadUI);
+
+export function startLoop() { requestAnimationFrame(renderFrame); }
