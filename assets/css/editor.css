@@ -182,6 +182,33 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   font-size: 11.5px; line-height: 1.7; padding: 20px;
 }
 
+/* ---- Schede libreria (Media/Effetti/Transizioni) ---- */
+.panel-head.lib-tabs { padding: 0; gap: 0; }
+.lib-tab {
+  background: transparent; border: none; height: 28px; padding: 0 11px;
+  color: var(--text-mute); font-size: 11px; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+}
+.lib-tab:hover { color: var(--text-dim); }
+.lib-tab.active { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+
+.lib-list { flex: 1 1 auto; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+.lib-item {
+  display: flex; align-items: center; gap: 9px; padding: 5px; border-radius: 5px;
+  background: var(--panel-bg-2); border: 1px solid transparent; cursor: pointer; text-align: left; width: 100%;
+}
+.lib-item:hover { border-color: var(--line-soft); background: #26262c; }
+.lib-thumb { width: 46px; height: 28px; border-radius: 3px; flex: 0 0 auto; border: 1px solid var(--line); }
+.lib-name { font-size: 11.5px; color: var(--text); }
+.trans-thumb { background: linear-gradient(90deg,#3a6aa8 0%,#d2a8ff 100%); }
+.trans-thumb[data-t="dipblack"]  { background: linear-gradient(90deg,#3a6aa8,#000 50%,#d2a8ff); }
+.trans-thumb[data-t="dipwhite"]  { background: linear-gradient(90deg,#3a6aa8,#fff 50%,#d2a8ff); }
+.trans-thumb[data-t="wipeleft"]  { background: linear-gradient(90deg,#d2a8ff 50%,#3a6aa8 50%); }
+.trans-thumb[data-t="wiperight"] { background: linear-gradient(90deg,#3a6aa8 50%,#d2a8ff 50%); }
+.trans-thumb[data-t="slideleft"] { background: linear-gradient(110deg,#3a6aa8 60%,#d2a8ff 60%); }
+.trans-thumb[data-t="slideright"]{ background: linear-gradient(250deg,#3a6aa8 60%,#d2a8ff 60%); }
+.trans-thumb[data-t="push"]      { background: linear-gradient(90deg,#3a6aa8 33%,#d2a8ff 33%,#d2a8ff 66%,#3a6aa8 66%); }
+
 /* ---- Media bin ---- */
 .bin-list { flex: 1 1 auto; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
 .bin-item {

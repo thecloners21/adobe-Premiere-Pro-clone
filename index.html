@@ -37,12 +37,18 @@
 <!-- ===== Workspace ===== -->
 <main class="workspace">
 
-  <!-- Left: media bin -->
+  <!-- Left: media bin + librerie -->
   <section class="panel bin">
-    <div class="panel-head">Media <span id="binCount" class="muted">0</span></div>
-    <div id="binList" class="bin-list">
+    <div class="panel-head lib-tabs">
+      <button class="lib-tab active" data-libtab="media">Media <span id="binCount" class="muted">0</span></button>
+      <button class="lib-tab" data-libtab="fx">Effetti</button>
+      <button class="lib-tab" data-libtab="trans">Transizioni</button>
+    </div>
+    <div id="binList" class="bin-list" data-pane="media">
       <div class="empty">Trascina qui i file<br>o premi <b>Importa media</b></div>
     </div>
+    <div id="fxLib" class="lib-list" data-pane="fx" hidden></div>
+    <div id="transLib" class="lib-list" data-pane="trans" hidden></div>
   </section>
 
   <!-- Center: program monitor -->

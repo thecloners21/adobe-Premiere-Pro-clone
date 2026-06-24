@@ -11,6 +11,7 @@ import * as ix from './interchange.js';
 import { runExport } from './export.js';
 import * as api from './api-client.js';
 import { audio } from './audio.js';
+import { renderLibraries, initLibraryTabs } from './library.js';
 
 /* ---------- toast ---------- */
 const toastEl = document.getElementById('toast');
@@ -228,5 +229,7 @@ projName.textContent = store.project.name;
 renderTimeline();
 renderInspector();
 renderBin();
+renderLibraries();
+initLibraryTabs();
 startLoop();
 toast('Pronto — importa un media per iniziare');
