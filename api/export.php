@@ -189,6 +189,25 @@ $buildClip = function(array $c, array $m, bool $alpha) use (&$fc, $clipInput, $e
     }
     // imposta l'alpha PRIMA degli effetti, così la trasparenza viene preservata
     if ($alpha) $chain[] = "format=yuva420p";
+    // maschera (solo tracce con alpha = overlay): ritaglia l'alpha con geq
+    if ($alpha && !empty($c['mask']) && (($c['mask']['type'] ?? 'none') !== 'none')) {
+        $mk = $c['mask']; $mt = $mk['type'];
+        $cx = $n((float)($mk['cx'] ?? 0.5)); $cy = $n((float)($mk['cy'] ?? 0.5));
+        $w = (float)($mk['w'] ?? 0.35); $h = (float)($mk['h'] ?? 0.35);
+        $fe = max(0.001, (float)($mk['feather'] ?? 0.06));
+        $ux = '(X/W)'; $uy = '(Y/H)';
+        if ($mt === 'rect') {
+            $wn = $n($w); $hn = $n($h); $fen = $n($fe);
+            $cov = "clip(($wn+$fen-abs($ux-$cx))/(2*$fen)\\,0\\,1)*clip(($hn+$fen-abs($uy-$cy))/(2*$fen)\\,0\\,1)";
+        } else {
+            $wn = $n($w); $hn = $n($h);
+            $feNorm = $n(max(0.001, $fe / max(min($w, $h), 0.01)));
+            $dd = "hypot(($ux-$cx)/$wn\\,($uy-$cy)/$hn)";
+            $cov = "clip(1-($dd-(1-$feNorm))/(2*$feNorm)\\,0\\,1)";
+        }
+        if (!empty($mk['invert'])) $cov = "(1-($cov))";
+        $chain[] = "geq=lum='lum(X\\,Y)':cb='cb(X\\,Y)':cr='cr(X\\,Y)':a='($cov)*alpha(X\\,Y)'";
+    }
     foreach ($efx($c) as $f) $chain[] = $f;
     $chain[] = "fps={$fps}";
     if ($alpha) {

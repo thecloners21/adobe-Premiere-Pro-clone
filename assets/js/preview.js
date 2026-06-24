@@ -252,6 +252,7 @@ function drawClip(clip, T, opts) {
   if (lut) o = { ...o, lut };
   const lgg = lggFor(clip);
   if (lgg) o = { ...o, lgg };
+  if (clip.mask && clip.mask.type && clip.mask.type !== 'none') o = { ...o, mask: clip.mask };
   // animazioni titolo
   if (m && m.kind === 'title' && m.title) {
     const ao = titleAnimOpts(m.title, localT, clipDur(clip));
@@ -278,8 +279,10 @@ function drawTransition(track, trans, T) {
   alignEl(elA, A, T); alignEl(elB, B, T);
   const PA = resolvedParams(A, T - A.start), PB = resolvedParams(B, T - B.start);
   const la = lutFor(A), lb = lutFor(B), ga = lggFor(A), gb = lggFor(B);
-  const dA = (extra = {}) => comp.draw(elA, PA, { ...extra, ...(la ? { lut: la } : {}), ...(ga ? { lgg: ga } : {}) });
-  const dB = (extra = {}) => comp.draw(elB, PB, { ...extra, ...(lb ? { lut: lb } : {}), ...(gb ? { lgg: gb } : {}) });
+  const mA = (A.mask && A.mask.type && A.mask.type !== 'none') ? A.mask : null;
+  const mB = (B.mask && B.mask.type && B.mask.type !== 'none') ? B.mask : null;
+  const dA = (extra = {}) => comp.draw(elA, PA, { ...extra, ...(la ? { lut: la } : {}), ...(ga ? { lgg: ga } : {}), ...(mA ? { mask: mA } : {}) });
+  const dB = (extra = {}) => comp.draw(elB, PB, { ...extra, ...(lb ? { lut: lb } : {}), ...(gb ? { lgg: gb } : {}), ...(mB ? { mask: mB } : {}) });
 
   switch (type) {
     case 'dipblack':

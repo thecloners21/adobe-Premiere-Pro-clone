@@ -81,6 +81,7 @@ uniform float uVignette, uGray, uSepia, uBlur, uSharpen, uOpacity;
 uniform float uWipe; uniform vec2 uWipeDir;
 uniform sampler2D uLUT; uniform float uUseLUT;   // curve RGB (color grading)
 uniform vec3 uLift, uGamma, uGain; uniform float uUseLGG; // bilanciamento Lift/Gamma/Gain
+uniform float uMaskType; uniform vec2 uMaskCenter, uMaskSize; uniform float uMaskFeather, uMaskInvert; // maschera
 
 vec3 hueRotate(vec3 col, float ang) {
   float c = cos(ang), s = sin(ang);
@@ -155,6 +156,23 @@ void main() {
   }
   c.rgb = clamp(c.rgb, 0.0, 1.0);
   c.a *= uOpacity;
+  // maschera (ellisse/rettangolo con feather, opz. invertita) in spazio UV della clip
+  if (uMaskType > 0.5) {
+    float cov;
+    if (uMaskType < 1.5) {                 // ellisse
+      vec2 d = (vUV - uMaskCenter) / max(uMaskSize, vec2(1e-4));
+      float dd = length(d);
+      float fe = uMaskFeather / max(min(uMaskSize.x, uMaskSize.y), 1e-4);
+      cov = 1.0 - smoothstep(1.0 - fe, 1.0 + fe, dd);
+    } else {                               // rettangolo
+      vec2 ad = abs(vUV - uMaskCenter);
+      float fx = 1.0 - smoothstep(uMaskSize.x - uMaskFeather, uMaskSize.x + uMaskFeather, ad.x);
+      float fy = 1.0 - smoothstep(uMaskSize.y - uMaskFeather, uMaskSize.y + uMaskFeather, ad.y);
+      cov = fx * fy;
+    }
+    if (uMaskInvert > 0.5) cov = 1.0 - cov;
+    c.a *= clamp(cov, 0.0, 1.0);
+  }
   gl_FragColor = c;
 }`;
 
@@ -181,7 +199,8 @@ export class GLCompositor {
     for (const n of ['uScale','uTrans','uRot','uFlip','uAspect','uSlide','uTexel','uSolid','uColor',
       'uBright','uContrast','uSat','uExposure','uHue','uTemp','uTint','uVignette','uGray','uSepia',
       'uBlur','uSharpen','uOpacity','uWipe','uWipeDir','uTex','uLUT','uUseLUT',
-      'uLift','uGamma','uGain','uUseLGG'])
+      'uLift','uGamma','uGain','uUseLGG',
+      'uMaskType','uMaskCenter','uMaskSize','uMaskFeather','uMaskInvert'])
       this.u[n] = gl.getUniformLocation(this.prog, n);
 
     this.tex = gl.createTexture();
@@ -266,6 +285,17 @@ export class GLCompositor {
     gl.uniform1f(this.u.uOpacity, (P.opacity ?? 1) * (opts.alpha ?? 1));
     if (opts.wipe) { gl.uniform1f(this.u.uWipe, opts.wipe.edge); gl.uniform2f(this.u.uWipeDir, opts.wipe.dir[0], opts.wipe.dir[1]); }
     else { gl.uniform1f(this.u.uWipe, -1); gl.uniform2f(this.u.uWipeDir, 1, 0); }
+    // maschera
+    const mk = opts.mask;
+    if (mk && mk.type && mk.type !== 'none') {
+      gl.uniform1f(this.u.uMaskType, mk.type === 'rect' ? 2 : 1);
+      gl.uniform2f(this.u.uMaskCenter, mk.cx ?? 0.5, mk.cy ?? 0.5);
+      gl.uniform2f(this.u.uMaskSize, Math.max(1e-4, mk.w ?? 0.4), Math.max(1e-4, mk.h ?? 0.4));
+      gl.uniform1f(this.u.uMaskFeather, mk.feather ?? 0);
+      gl.uniform1f(this.u.uMaskInvert, mk.invert ? 1 : 0);
+    } else {
+      gl.uniform1f(this.u.uMaskType, 0);
+    }
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
@@ -279,7 +309,7 @@ export class GLCompositor {
     gl.uniform1f(this.u.uOpacity, a);
     gl.uniform1f(this.u.uScale, 1); gl.uniform2f(this.u.uTrans, 0, 0); gl.uniform1f(this.u.uRot, 0);
     gl.uniform2f(this.u.uFlip, 1, 1); gl.uniform2f(this.u.uSlide, 0, 0);
-    gl.uniform1f(this.u.uWipe, -1);
+    gl.uniform1f(this.u.uWipe, -1); gl.uniform1f(this.u.uMaskType, 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 

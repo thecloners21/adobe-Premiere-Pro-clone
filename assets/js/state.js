@@ -58,7 +58,13 @@ export function makeClip(media, start, trackType) {
     ease: {},                 // easing per parametro keyframato: { key: 'linear'|'in'|'out'|'inout'|'hold' }
     curves: defaultCurves(),  // curve RGB di color grading
     color: defaultColor(),    // bilanciamento Lift/Gamma/Gain
+    mask: null,               // maschera {type:'ellipse'|'rect',cx,cy,w,h,feather,invert}
   };
+}
+
+/* maschera di default (ellisse centrata) */
+export function defaultMask() {
+  return { type: 'ellipse', cx: 0.5, cy: 0.5, w: 0.35, h: 0.35, feather: 0.06, invert: false };
 }
 
 /* ---- velocità clip ----
@@ -207,7 +213,7 @@ class Store {
         const cEnd = c.start + clipDur(c);
         if (t0 > c.start + 0.02 && t0 < cEnd - 0.02) {
           const cutSrc = srcAt(c, t0 - c.start);
-          const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})), ease: { ...(c.ease || {}) }, curves: JSON.parse(JSON.stringify(c.curves || {})), color: JSON.parse(JSON.stringify(c.color || {})) };
+          const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})), ease: { ...(c.ease || {}) }, curves: JSON.parse(JSON.stringify(c.curves || {})), color: JSON.parse(JSON.stringify(c.color || {})), mask: c.mask ? JSON.parse(JSON.stringify(c.mask)) : null };
           right.start = t0; right.in = cutSrc;
           c.out = cutSrc;
           t.clips.push(right);

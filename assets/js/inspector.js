@@ -2,7 +2,7 @@
    inspector.js — pannello "Controllo effetti": effetti raggruppati,
    keyframe, transizioni, flip, editor titoli, audio.
    ===================================================================== */
-import { store, tc, evalParam, evalGain, EASINGS, clipDur, clipSpeed } from './state.js';
+import { store, tc, evalParam, evalGain, EASINGS, clipDur, clipSpeed, defaultMask } from './state.js';
 import { FX_PARAMS, FX_GROUPS, TRANSITIONS } from './effects.js';
 import { updateTitle, TITLE_FONTS, TITLE_STYLES, TITLE_ANIMS } from './media.js';
 import { mountCurveEditor } from './curveeditor.js';
@@ -31,6 +31,7 @@ export function renderInspector() {
     html += flipRow(clip);
     html += `<div class="fx-group"><div class="fx-title">Curve RGB</div><div id="curveMount"></div></div>`;
     html += colorBalanceGroup(clip);
+    html += maskGroup(clip);
     html += transitionRow(clip);
   } else {
     html += audioGroup(clip);
@@ -90,6 +91,31 @@ function colorBalanceGroup(clip) {
     ${row('mids', 'Mezzitoni')}
     ${row('highlights', 'Luci')}
     <button class="curve-reset" data-lgg-reset="1" style="width:100%;margin-top:6px">Reset bilanciamento</button>
+  </div>`;
+}
+
+/* maschera della clip (ellisse / rettangolo con feather, opz. invertita) */
+function maskGroup(clip) {
+  const mk = (clip.mask && clip.mask.type) ? clip.mask : { type: 'none' };
+  const t = mk.type || 'none';
+  const opt = (v, l) => `<option value="${v}" ${t === v ? 'selected' : ''}>${l}</option>`;
+  let rows = '';
+  if (t !== 'none') {
+    const r = (label, key, val, min, max, step) => `<div class="fx-row"><label>${label}</label>
+        <input type="range" data-mask="${key}" min="${min}" max="${max}" step="${step}" value="${val}">
+        <span class="val">${fmt(val)}</span></div>`;
+    rows = r('Centro X', 'cx', mk.cx ?? 0.5, 0, 1, 0.005)
+         + r('Centro Y', 'cy', mk.cy ?? 0.5, 0, 1, 0.005)
+         + r('Larghezza', 'w', mk.w ?? 0.35, 0.02, 0.5, 0.005)
+         + r('Altezza', 'h', mk.h ?? 0.35, 0.02, 0.5, 0.005)
+         + r('Sfumatura', 'feather', mk.feather ?? 0.06, 0, 0.3, 0.005)
+         + `<div class="toggle-row"><button class="tg${mk.invert ? ' on' : ''}" data-mask-invert="1">Inverti maschera</button></div>`;
+  }
+  return `<div class="fx-group"><div class="fx-title">Maschera</div>
+    <div class="fx-row"><label>Forma</label>
+      <select data-mask-type="1" style="width:100%">${opt('none', 'Nessuna')}${opt('ellipse', 'Ellisse')}${opt('rect', 'Rettangolo')}</select></div>
+    ${rows}
+    ${t !== 'none' ? '<p class="hint">La maschera ritaglia la clip (le tracce sotto restano visibili). Onorata in anteprima ed export browser.</p>' : ''}
   </div>`;
 }
 
@@ -265,6 +291,28 @@ function wire(clip, m, track) {
   if (lggR) lggR.addEventListener('click', () => {
     clip.color = { shadows: { color: '#808080', lum: 0 }, mids: { color: '#808080', lum: 0 }, highlights: { color: '#808080', lum: 0 } };
     store.emit('inspector');
+  });
+
+  // maschera
+  const mtype = box.querySelector('[data-mask-type]');
+  if (mtype) mtype.addEventListener('change', () => {
+    if (mtype.value === 'none') clip.mask = null;
+    else {
+      if (!clip.mask || !clip.mask.type || clip.mask.type === 'none') clip.mask = defaultMask();
+      clip.mask.type = mtype.value;
+    }
+    renderInspector();
+  });
+  box.querySelectorAll('[data-mask]').forEach(inp => inp.addEventListener('input', () => {
+    if (!clip.mask) clip.mask = defaultMask();
+    clip.mask[inp.dataset.mask] = parseFloat(inp.value);
+    inp.parentElement.querySelector('.val').textContent = fmt(parseFloat(inp.value));
+    store.emit('touch');
+  }));
+  const minv = box.querySelector('[data-mask-invert]');
+  if (minv) minv.addEventListener('click', () => {
+    if (!clip.mask) clip.mask = defaultMask();
+    clip.mask.invert = !clip.mask.invert; minv.classList.toggle('on'); store.emit('touch');
   });
 
   // titolo
