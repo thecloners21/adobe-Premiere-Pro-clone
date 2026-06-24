@@ -477,7 +477,7 @@ select {
 /* ===================== TOAST ===================== */
 .toast {
   position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-  background: #2a2a30; border: 1px solid var(--line-soft); color: var(--text);
+  background: #2a2a30; border: 1px solid #44444c; color: #e8e8ee;
   padding: 10px 18px; border-radius: 8px; font-size: 12px; z-index: 60;
   box-shadow: 0 8px 30px rgba(0,0,0,.5);
 }
