@@ -47,6 +47,7 @@ export function makeClip(media, start, trackType) {
     start,
     in: 0,
     out: dur,
+    speed: 1,                 // velocità di riproduzione (1 = normale, >1 più veloce, <1 più lento)
     gain: 1,
     pan: 0,                   // panoramica stereo audio (-1 = sinistra, +1 = destra)
     fadeIn: 0,
@@ -59,6 +60,13 @@ export function makeClip(media, start, trackType) {
     color: defaultColor(),    // bilanciamento Lift/Gamma/Gain
   };
 }
+
+/* ---- velocità clip ----
+   La durata sulla timeline è (out-in)/speed; un tempo locale (timeline) si
+   mappa al tempo sorgente con in + localT*speed. */
+export function clipSpeed(clip) { return (clip && clip.speed) ? clip.speed : 1; }
+export function clipDur(clip) { return (clip.out - clip.in) / clipSpeed(clip); }
+export function srcAt(clip, localT) { return clip.in + localT * clipSpeed(clip); }
 
 /* curve di easing per i keyframe */
 export const EASINGS = [
@@ -196,9 +204,9 @@ class Store {
     let done = false;
     for (const t of this.project.tracks) {
       for (const c of [...t.clips]) {
-        const cEnd = c.start + (c.out - c.in);
+        const cEnd = c.start + clipDur(c);
         if (t0 > c.start + 0.02 && t0 < cEnd - 0.02) {
-          const cutSrc = c.in + (t0 - c.start);
+          const cutSrc = srcAt(c, t0 - c.start);
           const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})), ease: { ...(c.ease || {}) }, curves: JSON.parse(JSON.stringify(c.curves || {})), color: JSON.parse(JSON.stringify(c.color || {})) };
           right.start = t0; right.in = cutSrc;
           c.out = cutSrc;
@@ -216,7 +224,7 @@ class Store {
     let d = 0;
     for (const t of this.project.tracks)
       for (const c of t.clips)
-        d = Math.max(d, c.start + (c.out - c.in));
+        d = Math.max(d, c.start + clipDur(c));
     return d;
   }
 
@@ -254,7 +262,7 @@ class Store {
   /* clip attiva su una traccia ad un certo tempo */
   clipAt(track, t) {
     for (const c of track.clips) {
-      const end = c.start + (c.out - c.in);
+      const end = c.start + clipDur(c);
       if (t >= c.start && t < end) return c;
     }
     return null;
@@ -263,7 +271,7 @@ class Store {
   /* tutte le clip attive a t (per rilevare le sovrapposizioni = transizioni) */
   clipsAt(track, t) {
     return track.clips
-      .filter(c => t >= c.start && t < c.start + (c.out - c.in))
+      .filter(c => t >= c.start && t < c.start + clipDur(c))
       .sort((a, b) => a.start - b.start);
   }
 
@@ -273,7 +281,7 @@ class Store {
     if (act.length < 2) return null;
     const A = act[act.length - 2], B = act[act.length - 1];   // A uscente, B entrante
     const ovStart = B.start;
-    const ovEnd = Math.min(A.start + (A.out - A.in), B.start + (B.out - B.in));
+    const ovEnd = Math.min(A.start + clipDur(A), B.start + clipDur(B));
     if (t < ovStart || t > ovEnd || ovEnd <= ovStart) return null;
     const p = (t - ovStart) / (ovEnd - ovStart);
     return { A, B, p, ovStart, ovEnd, type: B.transType || 'dissolve' };

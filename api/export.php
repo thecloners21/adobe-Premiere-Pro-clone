@@ -24,6 +24,17 @@ $fps = max(1, (int)($project['fps'] ?? 30));
 $fmt = ($opts['fmt'] ?? 'mp4') === 'webm' ? 'webm' : 'mp4';
 $n = fn($v) => rtrim(rtrim(sprintf('%.5f', (float)$v), '0'), '.') ?: '0';
 
+/* velocità clip: durata timeline = (out-in)/speed */
+$cdur = fn($c) => ((float)$c['out'] - (float)$c['in']) / max(0.05, (float)($c['speed'] ?? 1));
+/* catena atempo (ogni istanza copre 0.5..2.0) per cambiare velocità audio mantenendo la qualità */
+$atempo = function ($sp) use ($n) {
+    $parts = []; $r = max(0.05, (float)$sp);
+    while ($r > 2.0 + 1e-9) { $parts[] = 'atempo=2.0'; $r /= 2.0; }
+    while ($r < 0.5 - 1e-9) { $parts[] = 'atempo=0.5'; $r /= 0.5; }
+    $parts[] = 'atempo=' . $n($r);
+    return implode(',', $parts);
+};
+
 /* font per i titoli */
 $fontFile = null;
 foreach (['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', '/Library/Fonts/Arial.ttf'] as $ff)
@@ -36,7 +47,7 @@ foreach ($project['media'] as $m) $mediaById[$m['id']] = $m;
 $D = 0.0;
 foreach ($project['tracks'] as $t)
     foreach ($t['clips'] as $c)
-        $D = max($D, (float)$c['start'] + ((float)$c['out'] - (float)$c['in']));
+        $D = max($D, (float)$c['start'] + $cdur($c));
 if ($D <= 0) json_out(['ok' => false, 'error' => 'timeline vuota'], 400);
 
 function media_path(array $m): ?string {
@@ -63,7 +74,7 @@ foreach ($project['tracks'] as $t) {
         if (($m['kind'] ?? '') === 'title') continue; // generato via filtro, niente input
         $path = media_path($m);
         if (!$path) json_out(['ok' => false, 'error' => 'media non sul server: ' . ($m['name'] ?? '')], 422);
-        $dur = (float)$c['out'] - (float)$c['in'];
+        $dur = $cdur($c);
         if (($m['kind'] ?? '') === 'image')
             $clipInput[$c['id']] = add_input($inputs, ['-loop','1','-t',$n($dur),'-i',$path]);
         else
@@ -158,9 +169,10 @@ $fc = [];
 $lblSeq = 0;
 
 /* costruisce lo stream video di una clip (length = clipLen). $alpha=true per overlay */
-$buildClip = function(array $c, array $m, bool $alpha) use (&$fc, $clipInput, $efx, $titleFilter, $W, $H, $fps, $n, &$lblSeq): string {
-    $dur = (float)$c['out'] - (float)$c['in'];
+$buildClip = function(array $c, array $m, bool $alpha) use (&$fc, $clipInput, $efx, $titleFilter, $W, $H, $fps, $n, $cdur, &$lblSeq): string {
+    $dur = $cdur($c);
     $IN = (float)$c['in']; $OUT = (float)$c['out'];
+    $sp = max(0.05, (float)($c['speed'] ?? 1));
     $lbl = 'seg' . ($lblSeq++);
     $chain = [];
     if (($m['kind'] ?? '') === 'title') {
@@ -170,7 +182,7 @@ $buildClip = function(array $c, array $m, bool $alpha) use (&$fc, $clipInput, $e
     } else {
         $i = $clipInput[$c['id']];
         if (($m['kind'] ?? '') === 'image') $src = "[{$i}:v]setpts=PTS-STARTPTS";
-        else $src = "[{$i}:v]trim=start={$n($IN)}:end={$n($OUT)},setpts=PTS-STARTPTS";
+        else $src = "[{$i}:v]trim=start={$n($IN)}:end={$n($OUT)},setpts=(PTS-STARTPTS)/{$n($sp)}";
         $chain[] = $src;
         $chain[] = "scale={$W}:{$H}:force_original_aspect_ratio=decrease";
         $chain[] = "pad={$W}:{$H}:(ow-iw)/2:(oh-ih)/2:black";
@@ -201,7 +213,7 @@ if ($mainTrack) {
     usort($clips, fn($a, $b) => $a['start'] <=> $b['start']);
     foreach ($clips as $c) {
         $m = $mediaById[$c['mediaId']] ?? null; if (!$m) continue;
-        $segDur = (float)$c['out'] - (float)$c['in'];
+        $segDur = $cdur($c);
         $seg = $buildClip($c, $m, false);
         if ($base === null) {
             if ((float)$c['start'] > 0.01) {
@@ -249,14 +261,14 @@ foreach ($upper as $t) {
     usort($clips, fn($a, $b) => $a['start'] <=> $b['start']);
     foreach ($clips as $idx => $c) {
         $m = $mediaById[$c['mediaId']] ?? null; if (!$m) continue;
-        $S = (float)$c['start']; $segDur = (float)$c['out'] - (float)$c['in']; $E = $S + $segDur;
+        $S = (float)$c['start']; $segDur = $cdur($c); $E = $S + $segDur;
         $seg = $buildClip($c, $m, true);
 
         // cross-dissolve con i vicini sovrapposti sulla stessa traccia (alpha fade)
         $fades = [];
         if ($idx > 0) {
             $prev = $clips[$idx - 1];
-            $ovIn = ($prev['start'] + ((float)$prev['out'] - (float)$prev['in'])) - $S;
+            $ovIn = ($prev['start'] + $cdur($prev)) - $S;
             if ($ovIn > 0.02) $fades[] = "fade=t=in:st=0:d={$n($ovIn)}:alpha=1";
         }
         if ($idx < count($clips) - 1) {
@@ -286,8 +298,10 @@ foreach ($project['tracks'] as $t) {
         $S = (float)$c['start']; $IN = (float)$c['in']; $OUT = (float)$c['out'];
         $Sms = (int)round($S * 1000);
         $gain = max(0, (float)($c['gain'] ?? 1));
+        $spv = max(0.05, (float)($c['speed'] ?? 1));
+        $tempo = $spv !== 1.0 ? ',' . $atempo($spv) : '';
         $lbl = 'au' . ($an++);
-        $fc[] = "[{$i}:a]atrim=start={$n($IN)}:end={$n($OUT)},asetpts=PTS-STARTPTS,adelay={$Sms}|{$Sms},volume={$n($gain)}[{$lbl}]";
+        $fc[] = "[{$i}:a]atrim=start={$n($IN)}:end={$n($OUT)},asetpts=PTS-STARTPTS{$tempo},adelay={$Sms}|{$Sms},volume={$n($gain)}[{$lbl}]";
         $alabels[] = "[{$lbl}]";
     }
 }

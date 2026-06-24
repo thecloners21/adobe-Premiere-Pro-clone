@@ -1,7 +1,7 @@
 /* =====================================================================
    timeline.js — render e interazione timeline multitraccia
    ===================================================================== */
-import { store, makeClip, tc } from './state.js';
+import { store, makeClip, tc, clipDur, clipSpeed } from './state.js';
 import { runtime } from './media.js';
 import { drawWaveform } from './audio.js';
 import { seek, updatePlayheadUI, THEAD_W } from './preview.js';
@@ -130,7 +130,8 @@ function renderTracks() {
 function buildClip(track, clip) {
   const m = store.media(clip.mediaId);
   const pps = store.pxPerSec;
-  const len = clip.out - clip.in;
+  const len = clipDur(clip);
+  const sp = clipSpeed(clip);
   const el = document.createElement('div');
   el.className = 'clip ' + track.type +
     (store.selectedClip && store.selectedClip.clipId === clip.id ? ' selected' : '');
@@ -142,6 +143,14 @@ function buildClip(track, clip) {
   label.className = 'clip-label';
   label.textContent = m ? m.name : 'clip';
   el.appendChild(label);
+
+  // badge velocità (solo se ≠ 100%)
+  if (Math.abs(sp - 1) > 1e-3) {
+    const sb = document.createElement('div');
+    sb.className = 'clip-speed';
+    sb.textContent = Math.round(sp * 100) + '%';
+    el.appendChild(sb);
+  }
 
   const body = document.createElement('div');
   body.className = 'clip-body';
@@ -161,7 +170,7 @@ function buildClip(track, clip) {
   const prev = track.clips.filter(c => c !== clip && c.start < clip.start)
     .sort((a, b) => b.start - a.start)[0];
   if (prev) {
-    const prevEnd = prev.start + (prev.out - prev.in);
+    const prevEnd = prev.start + clipDur(prev);
     const ov = prevEnd - clip.start;
     if (ov > 0.01) {
       const x = document.createElement('div');
@@ -229,13 +238,14 @@ function startTrim(e, track, clip, left) {
   const o = { start: clip.start, in: clip.in, out: clip.out };
   const m = store.media(clip.mediaId);
   const srcMax = m ? (m.duration || clip.out) : clip.out;
+  const sp = clipSpeed(clip);   // il delta timeline si converte in sorgente con *speed
 
   const move = (ev) => {
-    const d = (ev.clientX - startX) / store.pxPerSec;
+    const d = (ev.clientX - startX) / store.pxPerSec * sp;
     if (left) {
       let ni = Math.max(0, Math.min(o.in + d, o.out - 0.1));
-      const delta = ni - o.in;
-      clip.in = ni; clip.start = Math.max(0, o.start + delta);
+      const deltaSrc = ni - o.in;
+      clip.in = ni; clip.start = Math.max(0, o.start + deltaSrc / sp);
     } else {
       clip.out = Math.max(clip.in + 0.1, Math.min(o.out + d, srcMax || (o.out + d)));
     }
@@ -261,9 +271,10 @@ function srcMaxOf(clip) { const m = store.media(clip.mediaId); return m ? (m.dur
 function slipDrag(e, track, clip) {
   const o = { in: clip.in, out: clip.out };
   const len = o.out - o.in;
+  const sp = clipSpeed(clip);
   const srcMax = srcMaxOf(clip);
   bindDrag(e, (d) => {
-    const ni = clamp(o.in - d, 0, Math.max(0, srcMax - len));
+    const ni = clamp(o.in - d * sp, 0, Math.max(0, srcMax - len));
     clip.in = ni; clip.out = ni + len;
     store.emit('clips');
   });
@@ -274,17 +285,18 @@ function slideDrag(e, track, clip) {
   const o = { start: clip.start };
   const prev = store.prevClip(track, clip);
   const next = store.nextClip(track, clip);
+  const ps = prev ? clipSpeed(prev) : 1, ns = next ? clipSpeed(next) : 1;
   const op = prev ? { out: prev.out, in: prev.in, srcMax: srcMaxOf(prev) } : null;
   const on = next ? { start: next.start, in: next.in, out: next.out } : null;
-  // limiti del movimento d
+  // limiti del movimento d (in secondi timeline); i vicini cambiano in sorgente con la loro speed
   let dMin = -o.start, dMax = 1e9;
-  if (prev) { dMin = Math.max(dMin, op.in + 0.1 - op.out); dMax = Math.min(dMax, op.srcMax - op.out); }
-  if (next) { dMin = Math.max(dMin, -on.in); dMax = Math.min(dMax, (on.out - 0.1) - on.in); }
+  if (prev) { dMin = Math.max(dMin, (op.in + 0.1 - op.out) / ps); dMax = Math.min(dMax, (op.srcMax - op.out) / ps); }
+  if (next) { dMin = Math.max(dMin, -on.in / ns); dMax = Math.min(dMax, ((on.out - 0.1) - on.in) / ns); }
   bindDrag(e, (draw) => {
     const d = clamp(draw, dMin, dMax);
     clip.start = o.start + d;
-    if (prev) prev.out = op.out + d;
-    if (next) { next.start = on.start + d; next.in = on.in + d; }
+    if (prev) prev.out = op.out + d * ps;
+    if (next) { next.start = on.start + d; next.in = on.in + d * ns; }
     store.emit('clips');
   });
 }
@@ -292,19 +304,21 @@ function slideDrag(e, track, clip) {
 /* RIPPLE — taglia un bordo e fa scorrere tutte le clip successive */
 function rippleTrim(e, track, clip, left) {
   const o = { start: clip.start, in: clip.in, out: clip.out };
+  const sp = clipSpeed(clip);
   const srcMax = srcMaxOf(clip);
-  const oldLen = o.out - o.in;
+  const oldLen = (o.out - o.in) / sp;     // durata timeline iniziale
   const later = track.clips.filter(c => c !== clip && c.start > o.start + 1e-3).map(c => ({ clip: c, start: c.start }));
-  bindDrag(e, (d) => {
+  bindDrag(e, (draw) => {
+    const d = draw * sp;                   // delta sorgente
     let dDur;
     if (left) {
       const ni = clamp(o.in + d, 0, o.out - 0.1);
       clip.in = ni; clip.start = o.start;          // bordo sinistro ancorato
-      dDur = (o.out - ni) - oldLen;
+      dDur = (o.out - ni) / sp - oldLen;
     } else {
       const no = clamp(o.out + d, o.in + 0.1, srcMax);
       clip.out = no;
-      dDur = (no - o.in) - oldLen;
+      dDur = (no - o.in) / sp - oldLen;
     }
     for (const L of later) L.clip.start = Math.max(0, L.start + dDur);
     track.clips.sort((a, b) => a.start - b.start);
@@ -316,30 +330,33 @@ function rippleTrim(e, track, clip, left) {
 function rollTrim(e, track, clip, left) {
   if (left) {
     const prev = store.prevClip(track, clip);
-    if (!prev || Math.abs((prev.start + (prev.out - prev.in)) - clip.start) > 0.05)
+    if (!prev || Math.abs((prev.start + clipDur(prev)) - clip.start) > 0.05)
       return toast('Roll: nessuna clip adiacente a sinistra');
     const o = { start: clip.start, cin: clip.in, pout: prev.out };
+    const ps = clipSpeed(prev), cs = clipSpeed(clip);
     const prevSrc = srcMaxOf(prev);
-    const dMin = Math.max((prev.in + 0.1) - o.pout, -(o.cin));         // prev>0.1, clip.in>=0
-    const dMax = Math.min(prevSrc - o.pout, (clip.out - 0.1) - o.cin);  // prev<=src, clip>0.1
+    // d in secondi timeline; prev cambia in sorgente con ps, clip con cs
+    const dMin = Math.max(((prev.in + 0.1) - o.pout) / ps, -o.cin / cs);
+    const dMax = Math.min((prevSrc - o.pout) / ps, ((clip.out - 0.1) - o.cin) / cs);
     bindDrag(e, (draw) => {
       const d = clamp(draw, dMin, dMax);
-      prev.out = o.pout + d; clip.start = o.start + d; clip.in = o.cin + d;
+      prev.out = o.pout + d * ps; clip.start = o.start + d; clip.in = o.cin + d * cs;
       store.emit('clips');
     });
   } else {
     const next = store.nextClip(track, clip);
-    const clipEnd = clip.start + (clip.out - clip.in);
+    const clipEnd = clip.start + clipDur(clip);
     if (!next || Math.abs(next.start - clipEnd) > 0.05)
       return toast('Roll: nessuna clip adiacente a destra');
     const o = { cout: clip.out, nstart: next.start, nin: next.in };
+    const cs = clipSpeed(clip), ns = clipSpeed(next);
     const clipSrc = srcMaxOf(clip);
-    // spostando il taglio di d: clip cresce di d, next si accorcia di d dalla testa
-    const dMin = Math.max((clip.in + 0.1) - o.cout, -o.nin);                     // clip>0.1, next.in>=0
-    const dMax = Math.min(clipSrc - o.cout, (next.out - o.nin) - 0.1);           // clip<=src, next>0.1
+    // spostando il taglio di d (timeline): clip cresce, next si accorcia dalla testa
+    const dMin = Math.max(((clip.in + 0.1) - o.cout) / cs, -o.nin / ns);
+    const dMax = Math.min((clipSrc - o.cout) / cs, ((next.out - o.nin) - 0.1) / ns);
     bindDrag(e, (draw) => {
       const d = clamp(draw, dMin, dMax);
-      clip.out = o.cout + d; next.start = o.nstart + d; next.in = o.nin + d;
+      clip.out = o.cout + d * cs; next.start = o.nstart + d; next.in = o.nin + d * ns;
       store.emit('clips');
     });
   }
@@ -354,7 +371,7 @@ function snap(value, track, exceptClip) {
   for (const t of store.project.tracks)
     for (const c of t.clips) {
       if (c === exceptClip) continue;
-      points.push(c.start, c.start + (c.out - c.in));
+      points.push(c.start, c.start + clipDur(c));
     }
   for (const mk of (store.project.markers || [])) points.push(mk.t);
   for (const p of points) if (Math.abs(value - p) < thr) return p;

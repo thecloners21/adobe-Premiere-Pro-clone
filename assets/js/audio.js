@@ -2,7 +2,7 @@
    audio.js — grafo Web Audio: gain per traccia, pan, master, scheduling,
    keyframe di volume, ducking, VU meter, disegno waveform sulle clip.
    ===================================================================== */
-import { evalGain } from './state.js';
+import { evalGain, clipSpeed, clipDur } from './state.js';
 
 class AudioEngine {
   constructor() {
@@ -89,11 +89,13 @@ class AudioEngine {
     for (const { trackId, clip } of audioClips) {
       const buffer = getBuffer(clip.mediaId);
       if (!buffer) continue;
-      const clipEnd = clip.start + (clip.out - clip.in);
+      const speed = clipSpeed(clip);
+      const clipEnd = clip.start + clipDur(clip);
       if (clipEnd <= startSec) continue;
 
       const src = this.ctx.createBufferSource();
       src.buffer = buffer;
+      src.playbackRate.value = speed;   // velocità clip (cambia anche il pitch, come Premiere senza "mantieni tono")
       const g = this.ctx.createGain();
       const baseGain = clip.gain ?? 1;
       g.gain.value = baseGain;
@@ -106,22 +108,23 @@ class AudioEngine {
       }
       src.connect(g); tail.connect(this.trackGain(trackId));
 
-      // offset nel buffer e tempo di avvio sulla timeline
+      // offset nel buffer (secondi sorgente) e tempo di avvio sulla timeline.
+      // dur = durata di output (timeline); il buffer consumato è dur*speed.
       let when = now, offset = clip.in, dur;
       if (startSec <= clip.start) {
         when = now + (clip.start - startSec);
         offset = clip.in;
-        dur = clip.out - clip.in;
+        dur = (clip.out - clip.in) / speed;
       } else {
         when = now;
-        offset = clip.in + (startSec - clip.start);
-        dur = clip.out - (offset);
+        offset = clip.in + (startSec - clip.start) * speed;
+        dur = (clip.out - offset) / speed;
       }
       if (dur <= 0) continue;
 
       const hasGainKf = clip.kf && clip.kf.gain && clip.kf.gain.length;
       if (hasGainKf) {
-        // envelope di volume da keyframe (con easing campionato)
+        // envelope di volume da keyframe (con easing campionato), in tempo di output
         const firstLocal = Math.max(0, startSec - clip.start);
         const steps = Math.max(2, Math.ceil(dur * 30));
         const curve = new Float32Array(steps);
@@ -144,7 +147,9 @@ class AudioEngine {
         }
       }
 
-      try { src.start(when, Math.max(0, offset), dur); } catch (_) { continue; }
+      // start a velocità: niente "duration" (è in tempo buffer e ambigua col playbackRate);
+      // fermiamo in tempo di output con stop().
+      try { src.start(when, Math.max(0, offset)); src.stop(when + dur); } catch (_) { continue; }
       this.active.push({ src, gain: g });
     }
   }

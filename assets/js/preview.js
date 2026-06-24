@@ -2,7 +2,7 @@
    preview.js — motore di riproduzione: clock, compositing WebGL delle
    tracce video, sincronizzazione audio, transport, playhead.
    ===================================================================== */
-import { store, tc, resolvedParams } from './state.js';
+import { store, tc, resolvedParams, clipDur, clipSpeed, srcAt } from './state.js';
 import { runtime, titleAnimOpts, renderTitleCanvas } from './media.js';
 import { audio } from './audio.js';
 import { GLCompositor, buildCurveLUT, computeLGG } from './effects.js';
@@ -143,7 +143,7 @@ function applyDucking() {
   const intervals = [];
   for (const t of store.audioTracks()) {
     if (t.duck || t.mute) continue;          // le tracce non-ducked sono i trigger
-    for (const c of t.clips) intervals.push([c.start, c.start + (c.out - c.in)]);
+    for (const c of t.clips) intervals.push([c.start, c.start + clipDur(c)]);
   }
   audio.applyDucking(duckIds, intervals, store.playhead, store.duration());
 }
@@ -157,10 +157,11 @@ function syncVideoElements(T, startPlaying) {
       const el = elementFor(clip.mediaId);
       if (!el || el.tagName === 'IMG') continue;
       if (clip === c) {
-        const target = clip.in + (T - clip.start);
+        const target = srcAt(clip, T - clip.start);
         if (Math.abs((el.currentTime || 0) - target) > 0.25) {
           try { el.currentTime = target; } catch (_) {}
         }
+        try { el.playbackRate = clipSpeed(clip); } catch (_) {}
         if (startPlaying) { el.muted = true; el.play().catch(() => {}); }
       } else if (startPlaying) {
         try { el.pause(); } catch (_) {}
@@ -232,7 +233,8 @@ function drawVU() {
 /* mantiene un elemento video allineato durante il play */
 function alignEl(el, clip, T) {
   if (!el || el.tagName === 'IMG' || el.tagName === 'CANVAS') return;
-  const target = clip.in + (T - clip.start);
+  const target = srcAt(clip, T - clip.start);
+  try { el.playbackRate = clipSpeed(clip); } catch (_) {}
   if (store.playing) {
     if (el.paused) { try { el.currentTime = target; el.muted = true; el.play().catch(() => {}); } catch (_) {} }
     else if (Math.abs(el.currentTime - target) > 0.35) { try { el.currentTime = target; } catch (_) {} }
@@ -252,7 +254,7 @@ function drawClip(clip, T, opts) {
   if (lgg) o = { ...o, lgg };
   // animazioni titolo
   if (m && m.kind === 'title' && m.title) {
-    const ao = titleAnimOpts(m.title, localT, clip.out - clip.in);
+    const ao = titleAnimOpts(m.title, localT, clipDur(clip));
     if (ao) {
       if (ao.typeProgress != null) {
         renderTitleCanvas(el, m.title, m.width || store.project.width, m.height || store.project.height, ao.typeProgress);
@@ -317,7 +319,7 @@ function scrub() {
     const el = elementFor(c.mediaId);
     if (!el) continue;
     if (el.tagName === 'VIDEO') {
-      const target = c.in + (store.playhead - c.start);
+      const target = srcAt(c, store.playhead - c.start);
       seekExact(el, target);   // il rAF ridisegna appena il fotogramma è pronto
     }
   }

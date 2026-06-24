@@ -2,7 +2,7 @@
    inspector.js — pannello "Controllo effetti": effetti raggruppati,
    keyframe, transizioni, flip, editor titoli, audio.
    ===================================================================== */
-import { store, tc, evalParam, evalGain, EASINGS } from './state.js';
+import { store, tc, evalParam, evalGain, EASINGS, clipDur, clipSpeed } from './state.js';
 import { FX_PARAMS, FX_GROUPS, TRANSITIONS } from './effects.js';
 import { updateTitle, TITLE_FONTS, TITLE_STYLES, TITLE_ANIMS } from './media.js';
 import { mountCurveEditor } from './curveeditor.js';
@@ -10,7 +10,7 @@ import { mountCurveEditor } from './curveeditor.js';
 const box = document.getElementById('inspector');
 
 function localT(clip) {
-  return Math.max(0, Math.min(store.playhead - clip.start, clip.out - clip.in));
+  return Math.max(0, Math.min(store.playhead - clip.start, clipDur(clip)));
 }
 
 export function renderInspector() {
@@ -18,12 +18,13 @@ export function renderInspector() {
   if (!clip) { box.innerHTML = '<div class="empty">Seleziona una clip<br>per regolarne gli effetti</div>'; return; }
   const m = store.media(clip.mediaId);
   const track = store.track(store.selectedClip.trackId);
-  const len = clip.out - clip.in;
+  const len = clipDur(clip);
 
   let html = `<div class="insp-clip"><b>${escapeHtml(m ? m.name : 'clip')}</b><br>
-      ${track.name} · durata ${tc(len, store.project.fps)}</div>`;
+      ${track.name} · durata <span data-clip-dur>${tc(len, store.project.fps)}</span></div>`;
 
   if (m && m.kind === 'title') html += titleEditor(m);
+  if (!m || m.kind !== 'image') html += speedDurGroup(clip);
 
   if (track.type === 'video') {
     for (const g of FX_GROUPS) html += fxGroup(clip, g);
@@ -89,6 +90,22 @@ function colorBalanceGroup(clip) {
     ${row('mids', 'Mezzitoni')}
     ${row('highlights', 'Luci')}
     <button class="curve-reset" data-lgg-reset="1" style="width:100%;margin-top:6px">Reset bilanciamento</button>
+  </div>`;
+}
+
+/* velocità / durata della clip (slow & fast motion) */
+function speedDurGroup(clip) {
+  const sp = clipSpeed(clip);
+  const pct = Math.round(sp * 100);
+  const dur = clipDur(clip);
+  const presets = [25, 50, 100, 200, 400]
+    .map(p => `<button class="sp-preset${pct === p ? ' on' : ''}" data-sp="${p / 100}">${p}%</button>`).join('');
+  return `<div class="fx-group"><div class="fx-title">Velocità / Durata</div>
+    <div class="fx-row"><label>Velocità</label>
+      <input type="range" data-speed="1" min="0.1" max="4" step="0.05" value="${sp}">
+      <span class="val" data-speed-val>${pct}%</span></div>
+    <div class="sp-presets">${presets}</div>
+    <p class="hint" data-speed-dur>Durata risultante: ${tc(dur, store.project.fps)}</p>
   </div>`;
 }
 
@@ -220,6 +237,22 @@ function wire(clip, m, track) {
   // transizione
   const ts = box.querySelector('[data-trans]');
   if (ts) ts.addEventListener('change', () => { clip.transType = ts.value; store.emit('clips'); });
+
+  // velocità / durata (aggiorna timeline + etichette senza ricostruire l'inspector)
+  const spRange = box.querySelector('[data-speed]');
+  const applySpeed = (v) => {
+    clip.speed = Math.max(0.1, Math.min(4, v));
+    const pct = Math.round(clip.speed * 100);
+    const dur = clipDur(clip);
+    const sv = box.querySelector('[data-speed-val]'); if (sv) sv.textContent = pct + '%';
+    const sd = box.querySelector('[data-speed-dur]'); if (sd) sd.textContent = 'Durata risultante: ' + tc(dur, store.project.fps);
+    const cd = box.querySelector('[data-clip-dur]'); if (cd) cd.textContent = tc(dur, store.project.fps);
+    box.querySelectorAll('.sp-preset').forEach(b => b.classList.toggle('on', Math.round(parseFloat(b.dataset.sp) * 100) === pct));
+    if (spRange && document.activeElement !== spRange) spRange.value = clip.speed;
+    store.emit('speed');
+  };
+  if (spRange) spRange.addEventListener('input', () => applySpeed(parseFloat(spRange.value)));
+  box.querySelectorAll('.sp-preset').forEach(b => b.addEventListener('click', () => applySpeed(parseFloat(b.dataset.sp))));
 
   // bilanciamento colore (Lift/Gamma/Gain) — aggiorna senza ricostruire l'inspector
   box.querySelectorAll('[data-lgg-color]').forEach(inp => inp.addEventListener('input', () => {

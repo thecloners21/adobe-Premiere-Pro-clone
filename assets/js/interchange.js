@@ -3,7 +3,7 @@
    supportati da Premiere: EDL (CMX 3600) e FCPXML.
    (Il .prproj nativo è XML proprietario gzip: non garantibile, escluso.)
    ===================================================================== */
-import { store, makeClip, uid } from './state.js';
+import { store, makeClip, uid, clipDur } from './state.js';
 
 /* ---------- timecode HH:MM:SS:FF ---------- */
 function f2tc(sec, fps) {
@@ -30,7 +30,7 @@ export function toEDL() {
       const m = store.media(c.mediaId);
       const reel = (m ? m.name : 'CLIP').replace(/\W+/g, '').slice(0, 8).toUpperCase() || 'CLIP';
       const srcIn = f2tc(c.in, fps), srcOut = f2tc(c.out, fps);
-      const recIn = f2tc(c.start, fps), recOut = f2tc(c.start + (c.out - c.in), fps);
+      const recIn = f2tc(c.start, fps), recOut = f2tc(c.start + clipDur(c), fps);
       const transCode = c.transition > 0 ? `D    ${String(Math.round(c.transition * fps)).padStart(3, '0')}` : 'C        ';
       lines.push(`${String(ev).padStart(3, '0')}  ${reel.padEnd(8)} V     ${transCode} ${srcIn} ${srcOut} ${recIn} ${recOut}`);
       if (m) lines.push(`* FROM CLIP NAME: ${m.name}`);
@@ -57,8 +57,8 @@ export function toFCPXML() {
     for (const c of vtrack.clips.slice().sort((a, b) => a.start - b.start)) {
       const m = store.media(c.mediaId);
       spine.push(
-        `        <clip name="${esc(m ? m.name : 'clip')}" offset="${fr(c.start)}" duration="${fr(c.out - c.in)}" start="${fr(c.in)}">
-          <video ref="${c.mediaId}" offset="${fr(c.start)}" duration="${fr(c.out - c.in)}" start="${fr(c.in)}"/>
+        `        <clip name="${esc(m ? m.name : 'clip')}" offset="${fr(c.start)}" duration="${fr(clipDur(c))}" start="${fr(c.in)}">
+          <video ref="${c.mediaId}" offset="${fr(c.start)}" duration="${fr(clipDur(c))}" start="${fr(c.in)}"/>
         </clip>`);
     }
   }
