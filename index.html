@@ -86,6 +86,16 @@
 <section class="timeline-wrap">
   <div class="timeline-toolbar">
     <span class="tl-title">Timeline</span>
+    <div class="tl-tools" id="tlTools">
+      <button data-tool="select" class="active" title="Selezione / sposta (V)">▭</button>
+      <button data-tool="ripple" title="Ripple: taglia e fa scorrere le clip successive (B)">⇥</button>
+      <button data-tool="roll"   title="Roll: sposta il punto di taglio tra due clip (N)">⇋</button>
+      <button data-tool="slip"   title="Slip: scorre il contenuto della clip (Y)">↔</button>
+      <button data-tool="slide"  title="Slide: sposta la clip adattando i vicini (U)">⇄</button>
+      <span class="tl-sep"></span>
+      <button id="addMarker" title="Aggiungi marcatore al cursore (M)">⚑</button>
+      <button id="snapToggle" class="active" title="Magnete (snap) on/off">🧲</button>
+    </div>
     <label class="zoom">Zoom
       <input type="range" id="zoom" min="20" max="400" value="100">
     </label>

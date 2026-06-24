@@ -169,12 +169,34 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowRight': stepFrame(1); break;
     case 'Home': gotoStart(); break;
     case 'End': gotoEnd(); break;
+    case 'v': case 'V': setTool('select'); break;
+    case 'b': case 'B': setTool('ripple'); break;
+    case 'n': case 'N': setTool('roll'); break;
+    case 'y': case 'Y': setTool('slip'); break;
+    case 'u': case 'U': setTool('slide'); break;
+    case 'm': case 'M': store.addMarkerAt(store.playhead); toast('Marcatore aggiunto', 'ok'); break;
   }
 });
 
 /* ---------- zoom ---------- */
 const zoom = document.getElementById('zoom');
 zoom.addEventListener('input', () => { store.pxPerSec = parseInt(zoom.value); renderTimeline(); });
+
+/* ---------- strumenti timeline (#6) ---------- */
+const tlTools = document.getElementById('tlTools');
+const TOOL_NAMES = { select: 'Selezione', ripple: 'Ripple', roll: 'Roll', slip: 'Slip', slide: 'Slide' };
+function setTool(tool) {
+  store.tool = tool;
+  tlTools.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+  document.querySelector('.timeline').dataset.tool = tool;
+  toast('Strumento: ' + (TOOL_NAMES[tool] || tool));
+}
+tlTools.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.tool) return setTool(b.dataset.tool);
+  if (b.id === 'addMarker') { store.addMarkerAt(store.playhead); toast('Marcatore aggiunto', 'ok'); }
+  if (b.id === 'snapToggle') { store.snap = !store.snap; b.classList.toggle('active', store.snap); toast('Magnete ' + (store.snap ? 'attivo' : 'disattivo')); }
+});
 
 /* ---------- export modal ---------- */
 const exportModal = document.getElementById('exportModal');

@@ -3,7 +3,7 @@
    ===================================================================== */
 import { store, uid } from './state.js';
 import { audio } from './audio.js';
-import { putBlob } from './persist.js';
+import { putBlob, deleteBlob } from './persist.js';
 
 const binList = document.getElementById('binList');
 const binCount = document.getElementById('binCount');
@@ -182,6 +182,15 @@ export function updateTitle(media) {
   store.emit('clips');
 }
 
+/* rimuove completamente un media: clip, runtime, objectURL, blob persistito */
+export function removeMediaFully(id) {
+  const rt = runtime.get(id);
+  if (rt && rt.objectURL) { try { URL.revokeObjectURL(rt.objectURL); } catch (_) {} }
+  runtime.delete(id);
+  deleteBlob(id).catch(() => {});
+  store.removeMedia(id);
+}
+
 /* ---------- render del media bin ---------- */
 export function renderBin() {
   const media = store.project.media;
@@ -206,13 +215,21 @@ export function renderBin() {
       <div class="bin-meta">
         <div class="bin-name" title="${escapeAttr(m.name)}">${escapeHtml(m.name)}</div>
         <div class="bin-sub">${m.kind} · ${dur}</div>
-      </div>`;
+      </div>
+      <button class="bin-del" title="Rimuovi dal progetto">✕</button>`;
     item.addEventListener('dragstart', (e) => {
       item.classList.add('dragging');
       e.dataTransfer.setData('text/media-id', m.id);
       e.dataTransfer.effectAllowed = 'copy';
     });
     item.addEventListener('dragend', () => item.classList.remove('dragging'));
+    item.querySelector('.bin-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const used = store.project.tracks.some(t => t.clips.some(c => c.mediaId === m.id));
+      if (used && !confirm(`Rimuovere "${m.name}"? Verranno eliminate anche le clip che lo usano.`)) return;
+      removeMediaFully(m.id);
+      window.__toast && window.__toast('Media rimosso', 'ok');
+    });
     binList.appendChild(item);
   }
 }

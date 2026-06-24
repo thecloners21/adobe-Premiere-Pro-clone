@@ -49,6 +49,18 @@ export async function getBlob(id) {
   } catch (_) { return null; }
 }
 
+export async function deleteBlob(id) {
+  try {
+    const db = await openDB();
+    return await new Promise((res) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => res(false);
+    });
+  } catch (_) { return false; }
+}
+
 export async function clearBlobs() {
   try {
     const db = await openDB();

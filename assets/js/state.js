@@ -16,6 +16,7 @@ export function newProject(name = 'Progetto senza titolo') {
     height: 720,
     sampleRate: 48000,
     media: [],          // {id,name,kind:'video'|'audio'|'image',src,duration,width,height,hasAudio}
+    markers: [],        // {id,t,label}
     tracks: [
       { id: uid('v'), type: 'video', name: 'V2', clips: [], mute: false, solo: false },
       { id: uid('v'), type: 'video', name: 'V1', clips: [], mute: false, solo: false },
@@ -115,6 +116,8 @@ class Store {
     this.playhead = 0;          // secondi
     this.playing = false;
     this.pxPerSec = 100;        // zoom timeline
+    this.tool = 'select';       // select | ripple | roll | slip | slide
+    this.snap = true;           // magnete
     this._subs = new Set();
   }
   on(fn) { this._subs.add(fn); return () => this._subs.delete(fn); }
@@ -143,6 +146,15 @@ class Store {
 
   /* ---- mutazioni ---- */
   addMedia(m) { this.project.media.push(m); this.emit('media'); }
+
+  /* rimuove un media dal bin + tutte le clip che lo usano */
+  removeMedia(id) {
+    this.project.media = this.project.media.filter(m => m.id !== id);
+    for (const t of this.project.tracks) t.clips = t.clips.filter(c => c.mediaId !== id);
+    if (this.selectedClip && !this.clip(this.selectedClip.trackId, this.selectedClip.clipId)) this.selectedClip = null;
+    this.emit('clips');
+    this.emit('media');
+  }
 
   addClip(trackId, clip) {
     const t = this.track(trackId);
@@ -199,6 +211,31 @@ class Store {
     return this.project.tracks.filter(t => t.type === 'video').slice().reverse();
   }
   audioTracks() { return this.project.tracks.filter(t => t.type === 'audio'); }
+
+  /* ---- vicini sulla stessa traccia (per roll/slide) ---- */
+  prevClip(track, clip) {
+    let best = null;
+    for (const c of track.clips) if (c !== clip && c.start < clip.start && (!best || c.start > best.start)) best = c;
+    return best;
+  }
+  nextClip(track, clip) {
+    let best = null;
+    for (const c of track.clips) if (c !== clip && c.start > clip.start && (!best || c.start < best.start)) best = c;
+    return best;
+  }
+
+  /* ---- marcatori ---- */
+  addMarkerAt(t, label = '') {
+    if (!this.project.markers) this.project.markers = [];
+    this.project.markers.push({ id: uid('mk'), t: Math.max(0, t), label });
+    this.project.markers.sort((a, b) => a.t - b.t);
+    this.emit('clips');
+  }
+  removeMarker(id) {
+    if (!this.project.markers) return;
+    this.project.markers = this.project.markers.filter(m => m.id !== id);
+    this.emit('clips');
+  }
 
   /* clip attiva su una traccia ad un certo tempo */
   clipAt(track, t) {

@@ -42,6 +42,9 @@ automaticamente **nel browser** (vedi §10).
   direttamente nel pannello *Media*.
 - Ogni media mostra anteprima, tipo e durata.
 - I formati supportati dipendono dal browser (MP4/WebM/MOV, MP3/WAV/OGG, PNG/JPG…).
+- **Rimuovere un media:** passa il mouse sull'elemento nel pannello *Media* e premi
+  la **✕** (anche per i titoli). Se è usato in timeline, ti viene chiesta conferma e
+  le relative clip vengono eliminate.
 
 ---
 
@@ -200,7 +203,30 @@ Il progetto viene **salvato automaticamente nel browser**: chiudendo o
 
 ---
 
-## 15. Limiti noti
+## 15. Strumenti timeline pro
+
+Nella barra della timeline, accanto a "Timeline", ci sono gli **strumenti di
+montaggio** (come in Premiere). Seleziona lo strumento e poi agisci sulle clip:
+
+| Strumento | Icona | Tasto | Cosa fa |
+|-----------|:----:|:----:|---------|
+| **Selezione** | ▭ | `V` | Sposta e seleziona le clip (default) |
+| **Ripple** | ⇥ | `B` | Trascini un bordo: la clip si accorcia/allunga e **tutte le clip successive scorrono** per chiudere il vuoto |
+| **Roll** | ⇋ | `N` | Trascini il **punto di taglio** fra due clip adiacenti: una si allunga, l'altra si accorcia (durata totale invariata) |
+| **Slip** | ↔ | `Y` | Trascini sul corpo: **scorre il contenuto** (in/out) senza spostare posizione né durata |
+| **Slide** | ⇄ | `U` | Trascini sul corpo: **sposti la clip** e i vicini si adattano (durata totale invariata) |
+
+- **Marcatori ⚑** (`M`): aggiunge un marcatore al cursore. Sul righello, **clic**
+  per saltarci, **doppio clic** per eliminarlo. Le clip si agganciano anche ai marcatori.
+- **Magnete 🧲:** attiva/disattiva lo **snap** (aggancio ai bordi delle clip, al
+  cursore e ai marcatori).
+
+> Con Ripple/Roll attivi le maniglie dei bordi diventano gialle; con Slip/Slide
+> il cursore sul corpo clip diventa una doppia freccia.
+
+---
+
+## 16. Limiti noti
 
 - Editor con le funzioni core: non riproduce il 100% di Adobe Premiere Pro.
 - Export **server**: la dissolvenza `xfade` è applicata sulla traccia
