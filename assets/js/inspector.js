@@ -4,7 +4,7 @@
    ===================================================================== */
 import { store, tc, evalParam, evalGain, EASINGS } from './state.js';
 import { FX_PARAMS, FX_GROUPS, TRANSITIONS } from './effects.js';
-import { updateTitle } from './media.js';
+import { updateTitle, TITLE_FONTS, TITLE_STYLES, TITLE_ANIMS } from './media.js';
 
 const box = document.getElementById('inspector');
 
@@ -101,9 +101,17 @@ function clipRange(label, key, val, min, max, step) {
 
 function titleEditor(m) {
   const t = m.title;
-  return `<div class="fx-group"><div class="fx-title">Testo</div>
+  const stroke = t.stroke || { color: '#000000', width: 0 };
+  const anim = t.anim || { type: 'none', dur: 1 };
+  const fontOpts = TITLE_FONTS.map(f => `<option value="${f}" ${t.font===f?'selected':''}>${f}</option>`).join('');
+  const styleBtns = TITLE_STYLES.map((s, i) => `<button class="title-style" data-tstyle="${i}">${s.name}</button>`).join('');
+  const animOpts = TITLE_ANIMS.map(a => `<option value="${a.key}" ${anim.type===a.key?'selected':''}>${a.label}</option>`).join('');
+  return `<div class="fx-group"><div class="fx-title">Stili titolo</div>
+    <div class="title-styles">${styleBtns}</div></div>
+   <div class="fx-group"><div class="fx-title">Testo</div>
     <textarea class="title-text" rows="2" style="width:100%">${escapeHtml(t.text)}</textarea>
-    <div class="fx-row"><label>Dimensione</label><input type="range" data-ti="fontSize" min="20" max="200" step="1" value="${t.fontSize}"><span class="val">${t.fontSize}</span></div>
+    <div class="fx-row"><label>Font</label><select data-ti="font" style="width:100%">${fontOpts}</select></div>
+    <div class="fx-row"><label>Dimensione</label><input type="range" data-ti="fontSize" min="20" max="240" step="1" value="${t.fontSize}"><span class="val">${t.fontSize}</span></div>
     <div class="fx-row"><label>Colore</label><input type="color" data-ti="color" value="${t.color}"><span></span></div>
     <div class="toggle-row">
       <select data-ti="align"><option value="left" ${t.align==='left'?'selected':''}>Sinistra</option><option value="center" ${t.align==='center'?'selected':''}>Centro</option><option value="right" ${t.align==='right'?'selected':''}>Destra</option></select>
@@ -111,8 +119,23 @@ function titleEditor(m) {
     </div>
     <div class="toggle-row">
       <button class="tg${t.bold?' on':''}" data-ti-tg="bold">Grassetto</button>
+      <button class="tg${t.italic?' on':''}" data-ti-tg="italic">Corsivo</button>
       <button class="tg${t.shadow?' on':''}" data-ti-tg="shadow">Ombra</button>
-    </div></div>`;
+    </div></div>
+   <div class="fx-group"><div class="fx-title">Contorno e sfondo</div>
+    <div class="fx-row"><label>Contorno</label><input type="color" data-ti-stroke="color" value="${stroke.color}"><span></span></div>
+    <div class="fx-row"><label>Spessore</label><input type="range" data-ti-stroke="width" min="0" max="20" step="1" value="${stroke.width}"><span class="val">${stroke.width}</span></div>
+    <div class="fx-row"><label>Sfondo</label><input type="color" data-ti="bg" value="${t.bg && t.bg!=='transparent' ? t.bg : '#000000'}"><span></span></div>
+    <div class="fx-row"><label>Opacità sf.</label><input type="range" data-ti="bgOpacity" min="0" max="1" step="0.05" value="${t.bgOpacity ?? 0.55}"><span class="val">${t.bgOpacity ?? 0.55}</span></div>
+    <div class="toggle-row">
+      <button class="tg${t.band?' on':''}" data-ti-tg="band">Banda (lower third)</button>
+      <button class="tg${(t.bg && t.bg!=='transparent')?' on':''}" data-ti-bgtoggle="1">Sfondo on/off</button>
+    </div></div>
+   <div class="fx-group"><div class="fx-title">Animazione</div>
+    <div class="fx-row"><label>Tipo</label><select data-ti-anim="type" style="width:100%">${animOpts}</select></div>
+    <div class="fx-row"><label>Durata</label><input type="range" data-ti-anim="dur" min="0.2" max="4" step="0.1" value="${anim.dur ?? 1}"><span class="val">${anim.dur ?? 1}</span></div>
+    <p class="hint">Le animazioni si vedono in anteprima e nell'export browser.</p>
+   </div>`;
 }
 
 /* ---------- wiring ---------- */
@@ -183,6 +206,35 @@ function wire(clip, m, track) {
     }));
     box.querySelectorAll('[data-ti-tg]').forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.tiTg; m.title[k] = !m.title[k]; b.classList.toggle('on'); updateTitle(m);
+    }));
+    // contorno
+    box.querySelectorAll('[data-ti-stroke]').forEach(inp => inp.addEventListener('input', () => {
+      if (!m.title.stroke) m.title.stroke = { color: '#000000', width: 0 };
+      const k = inp.dataset.tiStroke;
+      m.title.stroke[k] = inp.type === 'range' ? parseFloat(inp.value) : inp.value;
+      const val = inp.parentElement.querySelector('.val'); if (val) val.textContent = inp.value;
+      updateTitle(m);
+    }));
+    // animazione
+    box.querySelectorAll('[data-ti-anim]').forEach(inp => inp.addEventListener('input', () => {
+      if (!m.title.anim) m.title.anim = { type: 'none', dur: 1 };
+      const k = inp.dataset.tiAnim;
+      m.title.anim[k] = inp.type === 'range' ? parseFloat(inp.value) : inp.value;
+      const val = inp.parentElement.querySelector('.val'); if (val) val.textContent = inp.value;
+      updateTitle(m);
+    }));
+    // sfondo on/off
+    const bgT = box.querySelector('[data-ti-bgtoggle]');
+    if (bgT) bgT.addEventListener('click', () => {
+      if (m.title.bg && m.title.bg !== 'transparent') m.title.bg = 'transparent';
+      else m.title.bg = (box.querySelector('[data-ti="bg"]') || {}).value || '#000000';
+      bgT.classList.toggle('on'); updateTitle(m);
+    });
+    // stili preset
+    box.querySelectorAll('[data-tstyle]').forEach(b => b.addEventListener('click', () => {
+      const s = TITLE_STYLES[parseInt(b.dataset.tstyle)].s;
+      Object.assign(m.title, JSON.parse(JSON.stringify(s)));
+      updateTitle(m); renderInspector();
     }));
   }
 }

@@ -46,7 +46,7 @@ Toggle 🌙/☀️ in topbar; `data-theme="dark|light"` su `<html>`, override va
 - **Effetti** (shader WebGL): Movimento (posX/posY/scala/rotazione/flipH/flipV/opacità), Colore (luminosità/contrasto/saturazione/esposizione/tonalità/temperatura/tinta), Stile (sfocatura/nitidezza/vignettatura/B&N/seppia).
 - **Transizioni reali** create sovrapponendo due clip sulla stessa traccia: dissolvenza incrociata, al nero, al bianco, tendina, scorrimento, spinta. Tipo scelto nell'inspector. Preview blenda davvero; server usa **`xfade`** sulla traccia principale.
 - **Keyframe**: pulsante ◆ accanto a ogni parametro fx aggiunge un keyframe al playhead; interpolazione lineare. Piena fedeltà nell'export **browser** (cattura il preview reale).
-- **Titoli/testo**: pulsante "Titolo" crea una clip-titolo (canvas), editabile nell'inspector (testo/dimensione/colore/allineamento/grassetto/ombra); server via `drawtext`.
+- **Titoli/testo**: pulsante "Titolo" crea una clip-titolo (canvas), editabile nell'inspector; server via `drawtext`. **Titoli avanzati (#8)**: `TITLE_FONTS`, `TITLE_STYLES` (preset stile), `TITLE_ANIMS`; modello esteso (font/italic/stroke{color,width}/bg+bgOpacity/band/anim{type,dur}); `renderTitleCanvas` disegna contorno, banda lower-third e supporta `typeProgress` (typewriter); `titleAnimOpts(ti,localT,clipLen)` → opts (alpha/slide/scale/typeProgress) applicati in `preview.drawClip`. Animazioni browser-only (l'export server resta statico via drawtext).
 
 ## Limiti noti — onestà tecnica
 - Un **clone perfetto** di Premiere non è l'obiettivo: editor funzionante con le funzioni core.

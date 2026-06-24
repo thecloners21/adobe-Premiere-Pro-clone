@@ -142,27 +142,109 @@ export function rehydrateTitle(media) {
 }
 
 /* ---------- titoli / testo ---------- */
+export const TITLE_FONTS = [
+  'Segoe UI', 'Arial', 'Georgia', 'Times New Roman', 'Courier New',
+  'Verdana', 'Trebuchet MS', 'Impact', 'Comic Sans MS', 'Palatino Linotype',
+];
+
+/* preset di stile (come gli "stili titolo" di Premiere) */
+export const TITLE_STYLES = [
+  { name: 'Bianco semplice', s: { color: '#ffffff', bold: true, shadow: true, stroke: { color: '#000000', width: 0 }, bg: 'transparent', band: false, font: 'Segoe UI' } },
+  { name: 'Contorno nero',   s: { color: '#ffffff', bold: true, shadow: false, stroke: { color: '#000000', width: 6 }, bg: 'transparent', band: false, font: 'Arial' } },
+  { name: 'Giallo cinema',   s: { color: '#ffe14d', bold: true, shadow: true, stroke: { color: '#3a2a00', width: 3 }, bg: 'transparent', band: false, font: 'Georgia' } },
+  { name: 'Lower third',     s: { color: '#ffffff', bold: true, shadow: false, stroke: { color: '#000000', width: 0 }, bg: '#000000', band: true, bgOpacity: 0.55, align: 'left', valign: 'bottom', font: 'Segoe UI' } },
+  { name: 'Impatto rosso',   s: { color: '#ffffff', bold: true, shadow: true, stroke: { color: '#8a0000', width: 5 }, bg: 'transparent', band: false, font: 'Impact' } },
+  { name: 'Elegante serif',  s: { color: '#f4f1e8', bold: false, shadow: true, stroke: { color: '#000000', width: 0 }, bg: 'transparent', band: false, font: 'Palatino Linotype' } },
+];
+
+/* animazioni preset (renderizzate in anteprima e nell'export browser) */
+export const TITLE_ANIMS = [
+  { key: 'none',       label: 'Nessuna' },
+  { key: 'fadeIn',     label: 'Dissolvenza in entrata' },
+  { key: 'fadeInOut',  label: 'Dissolvenza in/out' },
+  { key: 'slideUp',    label: 'Scorri dal basso' },
+  { key: 'slideLeft',  label: 'Scorri da destra' },
+  { key: 'zoomIn',     label: 'Zoom in' },
+  { key: 'typewriter', label: 'Macchina da scrivere' },
+];
+
 export function defaultTitle() {
-  return { text: 'Titolo', fontSize: 80, color: '#ffffff', bg: 'transparent',
-           align: 'center', valign: 'middle', font: 'Segoe UI', bold: true, shadow: true };
+  return {
+    text: 'Titolo', fontSize: 80, color: '#ffffff', bg: 'transparent', bgOpacity: 0.55, band: false,
+    align: 'center', valign: 'middle', font: 'Segoe UI', bold: true, italic: false, shadow: true,
+    stroke: { color: '#000000', width: 0 },
+    anim: { type: 'none', dur: 1 },
+  };
 }
 
-export function renderTitleCanvas(canvas, ti, W = 1280, H = 720) {
+/* progress 0..1 per il typewriter; null = testo completo (statico) */
+export function renderTitleCanvas(canvas, ti, W = 1280, H = 720, typeProgress = null) {
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
-  if (ti.bg && ti.bg !== 'transparent') { ctx.fillStyle = ti.bg; ctx.fillRect(0, 0, W, H); }
-  ctx.fillStyle = ti.color || '#fff';
+  const fontSize = ti.fontSize || 80;
+  const weight = ti.bold ? '700' : '400';
+  const style = ti.italic ? 'italic ' : '';
+  ctx.font = `${style}${weight} ${fontSize}px "${ti.font || 'Segoe UI'}", sans-serif`;
   ctx.textAlign = ti.align || 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `${ti.bold ? '700' : '400'} ${ti.fontSize || 80}px ${ti.font || 'Segoe UI'}, sans-serif`;
-  if (ti.shadow) { ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 3; }
+
+  let lines = String(ti.text || '').split('\n');
+  if (typeProgress != null) {
+    const full = lines.join('\n');
+    const n = Math.round(full.length * Math.max(0, Math.min(1, typeProgress)));
+    lines = full.slice(0, n).split('\n');
+  }
+  const lh = fontSize * 1.2;
   const x = ti.align === 'left' ? W * 0.08 : ti.align === 'right' ? W * 0.92 : W / 2;
   let y = ti.valign === 'top' ? H * 0.15 : ti.valign === 'bottom' ? H * 0.85 : H / 2;
-  const lines = String(ti.text || '').split('\n');
-  const lh = (ti.fontSize || 80) * 1.2;
   y -= (lines.length - 1) * lh / 2;
-  lines.forEach((ln, i) => ctx.fillText(ln, x, y + i * lh));
+
+  // banda / sfondo
+  if (ti.band && ti.bg && ti.bg !== 'transparent') {
+    const pad = fontSize * 0.45;
+    const bandH = lines.length * lh + pad * 2;
+    ctx.save();
+    ctx.globalAlpha = ti.bgOpacity ?? 0.55;
+    ctx.fillStyle = ti.bg;
+    ctx.fillRect(0, y - lh / 2 - pad, W, bandH);
+    ctx.restore();
+  } else if (!ti.band && ti.bg && ti.bg !== 'transparent') {
+    ctx.save(); ctx.globalAlpha = ti.bgOpacity ?? 1; ctx.fillStyle = ti.bg; ctx.fillRect(0, 0, W, H); ctx.restore();
+  }
+
+  const st = ti.stroke || { width: 0 };
+  lines.forEach((ln, i) => {
+    const ly = y + i * lh;
+    if (ti.shadow) { ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 3; }
+    else { ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; }
+    if (st.width > 0) {
+      ctx.linejoin = 'round'; ctx.lineWidth = st.width; ctx.strokeStyle = st.color || '#000';
+      ctx.strokeText(ln, x, ly);
+    }
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; // niente ombra sul fill se già sul contorno
+    if (ti.shadow && st.width <= 0) { ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 3; }
+    ctx.fillStyle = ti.color || '#fff';
+    ctx.fillText(ln, x, ly);
+  });
+}
+
+/* parametri d'animazione del titolo a progress p (0..1 sulla durata clip) */
+export function titleAnimOpts(ti, localT, clipLen) {
+  const a = ti.anim || { type: 'none' };
+  if (!a.type || a.type === 'none') return null;
+  const dur = Math.min(a.dur || 1, clipLen || 1);
+  const tIn = Math.max(0, Math.min(1, localT / dur));
+  const tOut = Math.max(0, Math.min(1, (clipLen - localT) / dur));
+  switch (a.type) {
+    case 'fadeIn':     return { alpha: tIn };
+    case 'fadeInOut':  return { alpha: Math.min(tIn, tOut) };
+    case 'slideUp':    return { slide: [0, (1 - tIn) * 0.5], alpha: tIn };
+    case 'slideLeft':  return { slide: [(1 - tIn) * 0.6, 0], alpha: tIn };
+    case 'zoomIn':     return { scale: 0.7 + 0.3 * tIn, alpha: tIn };
+    case 'typewriter': return { typeProgress: tIn };
+    default:           return null;
+  }
 }
 
 export function createTitle(project) {

@@ -128,10 +128,24 @@ Seleziona la clip entrante e scegli il **tipo** in *Transizione in entrata*:
 
 1. Menu **Titolo**: crea una clip-titolo nel pannello *Media*.
 2. Trascinala su una traccia video (in alto, così sta sopra il video).
-3. Selezionala e modifica nel pannello: testo, dimensione, colore,
-   allineamento, grassetto, ombra.
+3. Selezionala: nel pannello *Controllo effetti* trovi l'editor completo.
 
-I titoli hanno sfondo trasparente: si sovrappongono al video sottostante.
+**Stili titolo:** in cima, una griglia di **preset** (Bianco semplice, Contorno
+nero, Giallo cinema, Lower third, Impatto rosso, Elegante serif): un clic applica
+colore, font, contorno, ombra e sfondo in un colpo solo.
+
+**Testo:** contenuto, **font** (10 famiglie), dimensione, colore, allineamento
+orizzontale/verticale, **Grassetto / Corsivo / Ombra**.
+
+**Contorno e sfondo:** colore e **spessore del contorno**, colore e **opacità
+dello sfondo**, **Banda (lower third)** per una fascia dietro al testo, e
+**Sfondo on/off**.
+
+**Animazioni:** tipo (Dissolvenza in entrata, Dissolvenza in/out, Scorri dal
+basso, Scorri da destra, Zoom in, **Macchina da scrivere**) e **durata**. Le
+animazioni si vedono in anteprima e nell'**export browser**.
+
+I titoli hanno sfondo trasparente (salvo banda/sfondo): si sovrappongono al video.
 
 ---
 

@@ -3,7 +3,7 @@
    tracce video, sincronizzazione audio, transport, playhead.
    ===================================================================== */
 import { store, tc, resolvedParams } from './state.js';
-import { runtime } from './media.js';
+import { runtime, titleAnimOpts, renderTitleCanvas } from './media.js';
 import { audio } from './audio.js';
 import { GLCompositor } from './effects.js';
 import { seekExact } from './webcodecs.js';
@@ -218,9 +218,26 @@ function alignEl(el, clip, T) {
 function drawClip(clip, T, opts) {
   const el = elementFor(clip.mediaId);
   if (!el) return;
+  const m = store.media(clip.mediaId);
+  const localT = T - clip.start;
+  const P = resolvedParams(clip, localT);
+  let o = opts || {};
+  // animazioni titolo
+  if (m && m.kind === 'title' && m.title) {
+    const ao = titleAnimOpts(m.title, localT, clip.out - clip.in);
+    if (ao) {
+      if (ao.typeProgress != null) {
+        renderTitleCanvas(el, m.title, m.width || store.project.width, m.height || store.project.height, ao.typeProgress);
+      } else {
+        o = { ...o };
+        if (ao.alpha != null) o.alpha = (o.alpha != null ? o.alpha : 1) * ao.alpha;
+        if (ao.slide) o.slide = ao.slide;
+        if (ao.scale != null) P.scale = (P.scale || 1) * ao.scale;
+      }
+    }
+  }
   alignEl(el, clip, T);
-  const P = resolvedParams(clip, T - clip.start);
-  comp.draw(el, P, opts);
+  comp.draw(el, P, o);
 }
 
 /* rende una transizione reale tra due clip sovrapposte */
