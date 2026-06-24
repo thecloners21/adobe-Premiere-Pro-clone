@@ -13,6 +13,8 @@ import * as api from './api-client.js';
 import { audio } from './audio.js';
 import { renderLibraries, initLibraryTabs } from './library.js';
 import { saveProjectLocal, loadProjectLocal, clearProjectLocal, clearBlobs, getBlob } from './persist.js';
+import { precisionLabel } from './webcodecs.js';
+import { getSettings, saveSettings } from './settings.js';
 
 /* ---------- toast ---------- */
 const toastEl = document.getElementById('toast');
@@ -80,6 +82,7 @@ document.querySelector('.menu').addEventListener('click', (e) => {
     case 'open': io.serverOpen(toast); break;
     case 'projExport': projectExportChooser(); break;
     case 'projImport': projInput.click(); break;
+    case 'settings': openSettings(); break;
     case 'export': openExportModal(); break;
   }
 });
@@ -144,6 +147,95 @@ function projectExportChooser() {
 }
 function nameFor(ext) { return (store.project.name || 'progetto').replace(/[^\w\-]+/g, '_') + '.' + ext; }
 
+/* ---------- Impostazioni ---------- */
+function openSettings() {
+  const s = getSettings();
+  const p = store.project;
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  const ov = document.createElement('div');
+  ov.className = 'modal';
+  ov.innerHTML = `<div class="modal-card settings-card">
+    <h3>Impostazioni</h3>
+
+    <div class="settings-sec">Sequenza</div>
+    <div class="row"><label>Frame rate</label>
+      <select id="setFps">${[24,25,30,50,60].map(f => `<option value="${f}" ${p.fps===f?'selected':''}>${f} fps</option>`).join('')}</select></div>
+    <div class="row"><label>Risoluzione</label>
+      <select id="setRes">${resOptions(p)}</select></div>
+    <div class="row"><label>Audio sample rate</label>
+      <select id="setSr">${[44100,48000].map(r => `<option value="${r}" ${(p.sampleRate||48000)===r?'selected':''}>${r} Hz</option>`).join('')}</select></div>
+
+    <div class="settings-sec">Render / Motore (equivalente "Renderer" di Premiere)</div>
+    <div class="row"><label>Motore predefinito</label>
+      <select id="setEngine">
+        <option value="auto" ${s.defaultEngine==='auto'?'selected':''}>Automatico (server se c'è)</option>
+        <option value="server" ${s.defaultEngine==='server'?'selected':''}>Server ffmpeg</option>
+        <option value="wasm" ${s.defaultEngine==='wasm'?'selected':''}>Browser (MediaRecorder)</option>
+      </select></div>
+    <div class="row"><label>Server ffmpeg (URL)</label>
+      <input type="text" id="setServer" placeholder="vuoto = stessa origine (es. https://miohost.it)" value="${escapeAttr(s.serverBase || '')}"></div>
+    <div class="row"><label></label><button id="setVerify" class="mini">Verifica server</button><span id="setVerifyOut" class="muted" style="margin-left:8px"></span></div>
+
+    <div class="settings-sec">Proxy</div>
+    <div class="row"><label>Larghezza proxy</label>
+      <select id="setProxy">${[480,640,854,960].map(w => `<option value="${w}" ${s.proxyWidth===w?'selected':''}>${w}px</option>`).join('')}</select></div>
+
+    <div class="settings-sec">Aspetto</div>
+    <div class="row"><label>Tema</label>
+      <select id="setTheme"><option value="dark" ${cur==='dark'?'selected':''}>Scuro</option><option value="light" ${cur==='light'?'selected':''}>Chiaro</option></select></div>
+
+    <div class="modal-actions">
+      <button data-x="c">Annulla</button>
+      <button data-x="s" class="primary">Salva</button>
+    </div>
+  </div>`;
+
+  ov.querySelector('#setVerify').addEventListener('click', async () => {
+    const out = ov.querySelector('#setVerifyOut');
+    out.textContent = 'verifico…';
+    saveSettings({ serverBase: ov.querySelector('#setServer').value.trim() });
+    const eng = await api.checkEngine();
+    out.textContent = (eng.server && eng.ffmpeg) ? '✓ server ffmpeg attivo' : '✗ nessun server ffmpeg';
+    out.style.color = (eng.server && eng.ffmpeg) ? 'var(--ok, #8be0a8)' : '#e6a14b';
+  });
+
+  ov.addEventListener('click', (e) => {
+    const x = e.target.dataset.x; if (!x) return;
+    if (x === 's') {
+      // sequenza → progetto
+      p.fps = parseInt(ov.querySelector('#setFps').value) || 30;
+      const [w, h] = ov.querySelector('#setRes').value.split('x').map(n => parseInt(n));
+      p.width = w; p.height = h; p.sampleRate = parseInt(ov.querySelector('#setSr').value) || 48000;
+      const pv = document.getElementById('preview');
+      pv.width = w; pv.height = h;
+      // app settings
+      saveSettings({
+        defaultEngine: ov.querySelector('#setEngine').value,
+        serverBase: ov.querySelector('#setServer').value.trim(),
+        proxyWidth: parseInt(ov.querySelector('#setProxy').value) || 640,
+      });
+      // tema
+      const th = ov.querySelector('#setTheme').value;
+      document.documentElement.setAttribute('data-theme', th);
+      themeToggle.textContent = th === 'dark' ? '🌙' : '☀️';
+      localStorage.setItem('cp-theme', th);
+      // applica al default del dialog export
+      document.getElementById('expEngine').value = getSettings().defaultEngine;
+      renderTimeline(); store.emit('seek');
+      toast('Impostazioni salvate', 'ok');
+    }
+    document.body.removeChild(ov);
+  });
+  document.body.appendChild(ov);
+}
+
+function resOptions(p) {
+  const list = [[1920,1080,'Full HD'],[1280,720,'HD'],[854,480,'SD'],[1080,1080,'Quadrato'],[1080,1920,'Verticale 9:16']];
+  if (!list.some(r => r[0]===p.width && r[1]===p.height)) list.unshift([p.width, p.height, 'Attuale']);
+  return list.map(([w,h,n]) => `<option value="${w}x${h}" ${p.width===w&&p.height===h?'selected':''}>${w}×${h} (${n})</option>`).join('');
+}
+function escapeAttr(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
 /* ---------- transport ---------- */
 document.querySelector('.transport').addEventListener('click', (e) => {
   const tp = e.target.closest('button')?.dataset.tp; if (!tp) return;
@@ -203,6 +295,7 @@ const exportModal = document.getElementById('exportModal');
 const expProgress = document.getElementById('expProgress');
 function openExportModal() {
   if (store.duration() <= 0) return toast('Timeline vuota: aggiungi delle clip', 'err');
+  document.getElementById('expEngine').value = getSettings().defaultEngine;
   exportModal.hidden = false;
   expProgress.hidden = true;
   expProgress.querySelector('.bar').style.width = '0%';
@@ -256,6 +349,7 @@ function safeProj() { return (store.project.name || 'export').replace(/[^\w\-]+/
   const eng = await api.checkEngine();
   if (eng.server && eng.ffmpeg) { el.textContent = 'server ffmpeg'; el.className = 'badge ok'; }
   else { el.textContent = 'browser render'; el.className = 'badge warn'; }
+  el.title = 'Motore export: ' + el.textContent + ' · Anteprima: ' + precisionLabel();
 })();
 
 /* ---------- avvio ---------- */

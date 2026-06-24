@@ -4,6 +4,8 @@
 import { store, uid } from './state.js';
 import { audio } from './audio.js';
 import { putBlob, deleteBlob } from './persist.js';
+import { makeProxy } from './webcodecs.js';
+import { getSettings } from './settings.js';
 
 const binList = document.getElementById('binList');
 const binCount = document.getElementById('binCount');
@@ -111,6 +113,7 @@ export function rehydrateFromBlob(media, file) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     media.src = url; media._file = file;
+    media.useProxy = false;   // il proxy è solo runtime: va rigenerato dopo il refresh
     if (media.kind === 'image') {
       const img = new Image();
       img.onload = () => { runtime.set(media.id, { element: img, objectURL: url, thumb: url }); resolve(); };
@@ -182,13 +185,39 @@ export function updateTitle(media) {
   store.emit('clips');
 }
 
-/* rimuove completamente un media: clip, runtime, objectURL, blob persistito */
+/* rimuove completamente un media: clip, runtime, objectURL, proxy, blob persistito */
 export function removeMediaFully(id) {
   const rt = runtime.get(id);
   if (rt && rt.objectURL) { try { URL.revokeObjectURL(rt.objectURL); } catch (_) {} }
+  if (rt && rt.proxyURL) { try { URL.revokeObjectURL(rt.proxyURL); } catch (_) {} }
   runtime.delete(id);
   deleteBlob(id).catch(() => {});
   store.removeMedia(id);
+}
+
+/* crea (o attiva/disattiva) un proxy a bassa risoluzione per la clip video */
+async function toggleProxy(m, btn) {
+  const rt = runtime.get(m.id) || {};
+  if (rt.proxyEl) {                       // già esistente: commuta
+    m.useProxy = !m.useProxy;
+    btn.classList.toggle('on', m.useProxy);
+    store.emit('clips');
+    window.__toast && window.__toast('Proxy ' + (m.useProxy ? 'attivo' : 'disattivo'), 'ok');
+    return;
+  }
+  if (m.kind !== 'video' || !rt.element) return;
+  btn.disabled = true; const old = btn.textContent;
+  const targetW = getSettings().proxyWidth || 640;
+  const blob = await makeProxy(rt.element, { targetW, onProgress: p => { btn.textContent = Math.round(p * 100) + '%'; } });
+  btn.disabled = false; btn.textContent = old;
+  if (!blob) return window.__toast && window.__toast('Proxy non riuscito', 'err');
+  const url = URL.createObjectURL(blob);
+  const pv = document.createElement('video');
+  pv.src = url; pv.muted = true; pv.preload = 'auto'; pv.crossOrigin = 'anonymous';
+  rt.proxyEl = pv; rt.proxyURL = url; runtime.set(m.id, rt);
+  m.useProxy = true; btn.classList.add('on');
+  store.emit('clips');
+  window.__toast && window.__toast('Proxy creato (editing più fluido)', 'ok');
 }
 
 /* ---------- render del media bin ---------- */
@@ -214,8 +243,9 @@ export function renderBin() {
       </div>
       <div class="bin-meta">
         <div class="bin-name" title="${escapeAttr(m.name)}">${escapeHtml(m.name)}</div>
-        <div class="bin-sub">${m.kind} · ${dur}</div>
+        <div class="bin-sub">${m.kind} · ${dur}${m.useProxy ? ' · <span class="proxy-tag">proxy</span>' : ''}</div>
       </div>
+      ${m.kind === 'video' ? `<button class="bin-proxy${m.useProxy ? ' on' : ''}" title="Crea/usa un proxy a bassa risoluzione per un editing più fluido">PX</button>` : ''}
       <button class="bin-del" title="Rimuovi dal progetto">✕</button>`;
     item.addEventListener('dragstart', (e) => {
       item.classList.add('dragging');
@@ -230,6 +260,8 @@ export function renderBin() {
       removeMediaFully(m.id);
       window.__toast && window.__toast('Media rimosso', 'ok');
     });
+    const pxBtn = item.querySelector('.bin-proxy');
+    if (pxBtn) pxBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleProxy(m, pxBtn); });
     binList.appendChild(item);
   }
 }

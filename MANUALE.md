@@ -226,7 +226,41 @@ montaggio** (come in Premiere). Seleziona lo strumento e poi agisci sulle clip:
 
 ---
 
-## 16. Limiti noti
+## 16. Impostazioni
+
+Menu **Impostazioni** (barra superiore). È l'equivalente di *Impostazioni
+sequenza/progetto + Renderer* di Premiere.
+
+- **Sequenza:** frame rate, risoluzione del progetto, audio sample rate.
+- **Render / Motore:** è l'analogo del *Renderer* di Premiere (che lì sceglie tra
+  GPU e Software). Qui scegli:
+  - **Motore predefinito** dell'export: Automatico / Server ffmpeg / Browser.
+  - **Server ffmpeg (URL):** se il backend con ffmpeg è su un altro host, indica
+    qui l'indirizzo base (es. `https://miohost.it`). Vuoto = stessa origine.
+    Il pulsante **Verifica server** controlla se risponde.
+- **Proxy:** larghezza dei proxy generati (vedi §17).
+- **Aspetto:** tema chiaro/scuro.
+
+> In Adobe Premiere non esiste un "server ffmpeg": il rendering è locale. Nel
+> nostro clone web il calcolo pesante (ffmpeg) può stare sul server: questa voce
+> serve a indicarne l'indirizzo o a forzare il render nel browser.
+
+---
+
+## 17. Proxy e precisione fotogramma (WebCodecs)
+
+- **Proxy:** passa il mouse su un media **video** nel pannello *Media* e premi
+  **PX**: viene creato un **proxy a bassa risoluzione** (la barra mostra l'avanzamento).
+  Con il proxy attivo l'**editing è più fluido**; l'**export usa sempre l'originale**
+  a piena qualità. Ripremi **PX** per attivarlo/disattivarlo.
+- **Seek frame-accurate:** dove il browser lo supporta (Chrome/Edge), l'anteprima
+  usa **WebCodecs/`requestVideoFrameCallback`** per mostrare il fotogramma
+  esatto al timecode quando ti sposti o avanzi di un frame (`←`/`→`). Lo stato è
+  indicato nel tooltip del badge in alto a destra.
+
+---
+
+## 18. Limiti noti
 
 - Editor con le funzioni core: non riproduce il 100% di Adobe Premiere Pro.
 - Export **server**: la dissolvenza `xfade` è applicata sulla traccia

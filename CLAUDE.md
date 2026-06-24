@@ -23,7 +23,9 @@ Su hosting: caricare la cartella; serve PHP 8.1+. Il render server-side richiede
 - **export.js** — `runExport`: server ffmpeg se disponibile, altrimenti `MediaRecorder` su `canvas.captureStream()` + audio (tempo reale, output WebM/MP4 secondo supporto browser).
 - **project-io.js** — salva/apri su server, import/export file nativo `.cpproj` (JSON), upload media best-effort.
 - **interchange.js** — export **EDL (CMX 3600)** e **FCPXML**, import **FCPXML** (formati di scambio che Premiere legge/scrive).
-- **api-client.js** — fetch verso il backend.
+- **webcodecs.js** (#7) — `seekExact` (seek frame-accurate via `requestVideoFrameCallback`, con `VideoFrame` WebCodecs quando disponibile), `grabFrame`, `makeProxy` (proxy a bassa risoluzione via canvas+MediaRecorder). `precisionLabel()` per il badge. In `preview.js`: `elementFor` usa il proxy in editing, `setExportMode(true)` forza gli originali in export.
+- **settings.js** (#7/Impostazioni) — preferenze app in `localStorage` (`cp-settings-v1`): `defaultEngine`, `serverBase` (endpoint ffmpeg remoto, usato da `api-client.js`), `proxyWidth`. Le impostazioni di *sequenza* (fps/risoluzione/sampleRate) restano nel progetto. Dialog "Impostazioni" in `main.js` (`openSettings`).
+- **api-client.js** — fetch verso il backend; l'endpoint base è `serverBase()` (Impostazioni) + `api/`.
 - **main.js** — wiring: menu, transport, tastiera (Space play, S split, Canc elimina, ←/→ frame, Home/End), tema chiaro/scuro (persistito), badge motore, dialog export.
 
 ## Backend (`api/`, PHP 8.1 + SQLite)

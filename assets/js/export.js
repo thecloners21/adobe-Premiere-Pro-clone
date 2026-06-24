@@ -6,7 +6,7 @@
 import { store } from './state.js';
 import { audio } from './audio.js';
 import * as api from './api-client.js';
-import { play, pause, seek } from './preview.js';
+import { play, pause, seek, setExportMode } from './preview.js';
 import { uploadAllMedia } from './project-io.js';
 
 const canvas = document.getElementById('preview');
@@ -69,15 +69,18 @@ function browserRender(opts, ui) {
     try { rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 }); }
     catch (e) { return reject(e); }
     rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-    rec.onerror = e => reject(e.error || new Error('errore registrazione'));
+    rec.onerror = e => { setExportMode(false); reject(e.error || new Error('errore registrazione')); };
     rec.onstop = () => {
       try { audio.master.disconnect(aDest); } catch (_) {}
+      setExportMode(false);   // ripristina l'uso del proxy in editing
       const blob = new Blob(chunks, { type: mime });
       const url = URL.createObjectURL(blob);
       ui.progress(100, 'Completato');
       resolve({ url, kind: 'browser', filename: safeName() + '.' + (mime.includes('mp4') ? 'mp4' : 'webm') });
     };
 
+    // export sempre alla risoluzione piena (no proxy)
+    setExportMode(true);
     // avvia dall'inizio e registra in tempo reale
     seek(0);
     setTimeout(() => {

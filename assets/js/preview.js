@@ -6,8 +6,13 @@ import { store, tc, resolvedParams } from './state.js';
 import { runtime } from './media.js';
 import { audio } from './audio.js';
 import { GLCompositor } from './effects.js';
+import { seekExact } from './webcodecs.js';
 
 export const THEAD_W = 150;
+
+/* in export forziamo gli originali (no proxy) per la massima qualità */
+let exportMode = false;
+export function setExportMode(v) { exportMode = !!v; }
 
 const canvas = document.getElementById('preview');
 const playBtn = document.getElementById('playBtn');
@@ -23,10 +28,15 @@ const comp = new GLCompositor(canvas);
 let anchorPerf = 0;    // performance.now() al via (clock indipendente dall'audio)
 let anchorHead = 0;    // playhead al via
 
-/* mantiene un solo elemento per media; se serve più istanze, future-work */
+/* mantiene un solo elemento per media; usa il proxy in editing se attivo */
 function elementFor(mediaId) {
   const rt = runtime.get(mediaId);
-  return rt ? rt.element : null;
+  if (!rt) return null;
+  if (!exportMode) {
+    const m = store.media(mediaId);
+    if (m && m.useProxy && rt.proxyEl) return rt.proxyEl;
+  }
+  return rt.element;
 }
 function bufferFor(mediaId) {
   const rt = runtime.get(mediaId);
@@ -250,13 +260,19 @@ function drawTransition(track, trans, T) {
   }
 }
 
-/* disegno singolo frame da fermo (scrub) — aspetta il seek poi ridisegna */
-let scrubTimer = null;
+/* disegno singolo frame da fermo (scrub) — seek frame-accurate sui video attivi */
 function scrub() {
-  syncVideoElements(store.playhead, false);
-  clearTimeout(scrubTimer);
-  // i seek dei video sono async: ridisegna dopo un attimo
-  scrubTimer = setTimeout(() => {}, 60);
+  for (const track of store.project.tracks) {
+    if (track.type !== 'video') continue;
+    const c = store.clipAt(track, store.playhead);
+    if (!c) continue;
+    const el = elementFor(c.mediaId);
+    if (!el) continue;
+    if (el.tagName === 'VIDEO') {
+      const target = c.in + (store.playhead - c.start);
+      seekExact(el, target);   // il rAF ridisegna appena il fotogramma è pronto
+    }
+  }
 }
 
 export function updatePlayheadUI() {
