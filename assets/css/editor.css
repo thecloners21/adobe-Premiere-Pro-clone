@@ -71,6 +71,22 @@
 [data-theme="light"] .track.video .track-lane { background-color: #b0b6c4; }
 [data-theme="light"] .track.audio .track-lane { background-color: #a8c2b2; }
 [data-theme="light"] .tl-ruler { background: #b0b0b8; }
+/* --- correzioni superfici con colori fissi nel tema chiaro --- */
+[data-theme="light"] .topbar { background: linear-gradient(#d6d6dc, #c4c4cb); }
+[data-theme="light"] .brand-name { color: var(--text); }
+[data-theme="light"] .track-head { background: linear-gradient(#c4c4cb, #b8b8bf); }
+[data-theme="light"] .th-btns button { background: #cdcdd3; color: var(--text-dim); }
+[data-theme="light"] .transport button { background: #cdcdd3; color: var(--text-dim); }
+[data-theme="light"] .transport button.play { background: linear-gradient(#5a8fd6, #3f6fb0); color: #fff; }
+[data-theme="light"] #preview { box-shadow: 0 0 0 1px #6e6e76, 0 8px 24px rgba(0,0,0,.28); }
+[data-theme="light"] .vu-wrap {
+  background: #1a1a20; border-color: #8a8a92;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.35);
+}
+[data-theme="light"] .badge.ok  { color: #1f7a42; border-color: #57a07a; }
+[data-theme="light"] .badge.warn { color: #8a6a14; border-color: #c79a14; }
+[data-theme="light"] .tl-ruler .tick { border-left-color: #95959e; }
+[data-theme="light"] .tl-ruler .tick.major { border-left-color: #7a7a84; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -205,6 +221,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   flex: 1 1 auto; overflow-y: auto; padding: 8px;
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; align-content: start;
 }
+/* l'attributo hidden deve avere la meglio su display:grid/flex */
+.lib-list[hidden], .bin-list[hidden] { display: none; }
 .lib-item {
   display: flex; flex-direction: column; gap: 5px; padding: 5px; border-radius: 5px;
   background: var(--panel-bg-2); border: 1px solid transparent; cursor: pointer; text-align: center; width: 100%;
@@ -278,8 +296,10 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .transport button[data-tp="del"] { width: auto; padding: 0 10px; font-size: 11px; }
 .transport .sep { width: 1px; height: 22px; background: var(--line-soft); margin: 0 6px; }
 .vu-wrap {
-  margin-left: 10px; padding: 2px; border-radius: 4px;
-  background: #0c0c0e; border: 1px solid var(--line); display: inline-flex;
+  margin-left: 10px; padding: 3px 4px; border-radius: 4px;
+  background: #14141a; border: 1px solid #303036;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.7);
+  display: inline-flex; align-items: center;
 }
 #vuMeter { display: block; }
 
