@@ -103,6 +103,20 @@ quella fascia tonale (es. ombre verso il blu per un look freddo), lo **slider**
 ne alza/abbassa la luminosità. È l'equivalente delle *ruote colore* di Lumetri.
 *Reset bilanciamento* riporta tutto a neutro.
 
+**Secondaria HSL:** corregge **solo una banda di colore**, come la *Secondaria*
+di Lumetri. Premi **Attiva**, scegli il **Colore chiave** (la tonalità da
+isolare), regola **Ampiezza tonalità**, **Morbidezza** e **Saturazione minima**
+per definire bene la selezione, poi nella sezione **Correzione** usa *Sposta
+tonalità*, *Saturazione* e *Luminosità*. Esempi: desatura tutto tranne la pelle,
+oppure cambia il colore di un solo oggetto. Anteprima ed export browser.
+
+**Maschera:** ritaglia la clip con una forma **Ellisse** o **Rettangolo**.
+Regola **Centro X/Y**, **Larghezza/Altezza** e **Sfumatura** (bordo morbido);
+**Inverti maschera** nasconde l'interno invece dell'esterno. Le tracce sotto
+restano visibili attraverso la parte ritagliata (utile per spotlight, riquadri,
+"buchi" su un livello). Anteprima ed export browser; il render server applica la
+maschera alle clip delle **tracce superiori** (overlay).
+
 ---
 
 ## 7. Keyframe (animazione degli effetti)
@@ -288,13 +302,45 @@ sequenza/progetto + Renderer* di Premiere.
 
 ---
 
-## 18. Limiti noti
+## 18. Velocità clip (slow & fast motion)
+
+Seleziona una clip: in alto nel pannello trovi **Velocità / Durata**.
+
+- Usa lo **slider** (10%–400%) o i **preset** rapidi (25/50/100/200/400%).
+- Sotto il 100% la clip rallenta (e si allunga sulla timeline); sopra accelera
+  (e si accorcia). La **durata risultante** è mostrata in tempo reale, e un
+  **badge con la percentuale** appare sulla clip in timeline.
+- L'audio segue la velocità (cambia anche di tono, come Premiere senza
+  "Mantieni tono"). Tutti gli strumenti di trim (incluse ripple/roll/slip/slide)
+  tengono conto della velocità.
+- Reso in anteprima, export browser **e** export server (`setpts`/`atempo`).
+
+---
+
+## 19. Sequenze annidate (nesting)
+
+Premi **Annida** nel menu in alto: l'**intera timeline** viene collassata in una
+**sequenza annidata**, che compare nel pannello *Media* (icona **⧉ SEQ**) e viene
+posata come **singola clip** su V1. Da lì puoi trattarla come una clip normale:
+spostarla, tagliarla, applicarle effetti, color grading, **maschere**, velocità e
+transizioni — il tutto si applica al contenuto annidato come un blocco unico.
+
+Utile per: applicare un effetto a un gruppo di clip in un colpo solo, riordinare
+un montaggio complesso, o costruire composizioni a più livelli.
+
+> Reso fedelmente in anteprima ed **export browser** (audio incluso, appiattito).
+> Il render **server** salta le clip-sequenza: per esportarle usa il browser.
+
+---
+
+## 20. Limiti noti
 
 - Editor con le funzioni core: non riproduce il 100% di Adobe Premiere Pro.
 - Export **server**: la dissolvenza `xfade` è applicata sulla traccia
   principale; le tracce superiori sono in sovrapposizione; gli effetti usano il
-  valore base (i keyframe non sono interpolati lato server). Per la massima
-  fedeltà usa l'export **browser**.
+  valore base (i keyframe non sono interpolati lato server). Il **color grading
+  avanzato** (curve, Lift/Gamma/Gain, Secondaria HSL) e le **sequenze annidate**
+  sono resi solo nell'export **browser**. Per la massima fedeltà usa il browser.
 - I formati `.prproj` (binario proprietario) e AAF non sono supportati;
   l'interscambio avviene via EDL/FCPXML.
 

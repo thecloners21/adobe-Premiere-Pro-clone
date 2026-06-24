@@ -22,6 +22,12 @@ sul server, render ffmpeg — usano automaticamente il fallback nel browser.)*
 - **Effetti** (shader): Movimento (posizione/scala/rotazione/flip/opacità),
   Colore (luminosità/contrasto/saturazione/esposizione/tonalità/temperatura/tinta),
   Stile (sfocatura/nitidezza/vignettatura/B&N/seppia).
+- **Color grading**: **curve RGB**, **ruote colore Lift/Gamma/Gain** (ombre/
+  mezzitoni/luci) e **Secondaria HSL** (correzione su una sola banda di colore).
+- **Maschere**: ellisse/rettangolo con sfumatura e inversione (ritaglio per clip).
+- **Velocità clip**: slow & fast motion 10–400% con preset (video + audio).
+- **Sequenze annidate (nesting)**: collassa la timeline in una sequenza-clip
+  editabile come blocco unico (effetti/grading/maschere/velocità).
 - **Libreria** Effetti e Transizioni con anteprime, applicabili con un clic.
 - **Keyframe** su tutti i parametri, con **curve di accelerazione** (easing/Bézier).
 - **Transizioni** vere: dissolvenza incrociata, al nero, al bianco, tendina,
