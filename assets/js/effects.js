@@ -82,6 +82,22 @@ uniform float uWipe; uniform vec2 uWipeDir;
 uniform sampler2D uLUT; uniform float uUseLUT;   // curve RGB (color grading)
 uniform vec3 uLift, uGamma, uGain; uniform float uUseLGG; // bilanciamento Lift/Gamma/Gain
 uniform float uMaskType; uniform vec2 uMaskCenter, uMaskSize; uniform float uMaskFeather, uMaskInvert; // maschera
+// qualificazione secondaria HSL: chiave su tonalità + correzione
+uniform float uSecOn, uSecHue, uSecHueW, uSecSoft, uSecSatMin, uSecdHue, uSecdSat, uSecdLum;
+
+vec3 rgb2hsv(vec3 c) {
+  vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
+  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+  float d = q.x - min(q.w, q.y);
+  float e = 1.0e-10;
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+vec3 hsv2rgb(vec3 c) {
+  vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
 
 vec3 hueRotate(vec3 col, float ang) {
   float c = cos(ang), s = sin(ang);
@@ -143,6 +159,19 @@ void main() {
     c.g = texture2D(uLUT, vec2(c.g, 0.5)).g;
     c.b = texture2D(uLUT, vec2(c.b, 0.5)).b;
   }
+  // qualificazione secondaria HSL: corregge solo i pixel nella banda di tonalità
+  if (uSecOn > 0.5) {
+    vec3 hsv = rgb2hsv(c.rgb);
+    float hd = abs(hsv.x - uSecHue); hd = min(hd, 1.0 - hd);   // distanza circolare 0..0.5
+    float hmask = 1.0 - smoothstep(uSecHueW, uSecHueW + uSecSoft + 1e-4, hd);
+    float smask = smoothstep(uSecSatMin, uSecSatMin + 0.06, hsv.y);
+    float mq = hmask * smask;
+    vec3 h2 = hsv;
+    h2.x = fract(h2.x + uSecdHue);
+    h2.y = clamp(h2.y * (1.0 + uSecdSat), 0.0, 1.0);
+    h2.z = clamp(h2.z + uSecdLum, 0.0, 1.0);
+    c.rgb = mix(c.rgb, hsv2rgb(h2), mq);
+  }
   // bianco e nero
   float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
   c.rgb = mix(c.rgb, vec3(g), uGray);
@@ -200,7 +229,8 @@ export class GLCompositor {
       'uBright','uContrast','uSat','uExposure','uHue','uTemp','uTint','uVignette','uGray','uSepia',
       'uBlur','uSharpen','uOpacity','uWipe','uWipeDir','uTex','uLUT','uUseLUT',
       'uLift','uGamma','uGain','uUseLGG',
-      'uMaskType','uMaskCenter','uMaskSize','uMaskFeather','uMaskInvert'])
+      'uMaskType','uMaskCenter','uMaskSize','uMaskFeather','uMaskInvert',
+      'uSecOn','uSecHue','uSecHueW','uSecSoft','uSecSatMin','uSecdHue','uSecdSat','uSecdLum'])
       this.u[n] = gl.getUniformLocation(this.prog, n);
 
     this.tex = gl.createTexture();
@@ -296,6 +326,20 @@ export class GLCompositor {
     } else {
       gl.uniform1f(this.u.uMaskType, 0);
     }
+    // qualificazione secondaria HSL
+    const sc = opts.sec;
+    if (sc) {
+      gl.uniform1f(this.u.uSecOn, 1);
+      gl.uniform1f(this.u.uSecHue, sc.hue ?? 0);
+      gl.uniform1f(this.u.uSecHueW, sc.hueW ?? 0.08);
+      gl.uniform1f(this.u.uSecSoft, sc.soft ?? 0.08);
+      gl.uniform1f(this.u.uSecSatMin, sc.satMin ?? 0.15);
+      gl.uniform1f(this.u.uSecdHue, sc.dHue ?? 0);
+      gl.uniform1f(this.u.uSecdSat, sc.dSat ?? 0);
+      gl.uniform1f(this.u.uSecdLum, sc.dLum ?? 0);
+    } else {
+      gl.uniform1f(this.u.uSecOn, 0);
+    }
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
@@ -309,7 +353,7 @@ export class GLCompositor {
     gl.uniform1f(this.u.uOpacity, a);
     gl.uniform1f(this.u.uScale, 1); gl.uniform2f(this.u.uTrans, 0, 0); gl.uniform1f(this.u.uRot, 0);
     gl.uniform2f(this.u.uFlip, 1, 1); gl.uniform2f(this.u.uSlide, 0, 0);
-    gl.uniform1f(this.u.uWipe, -1); gl.uniform1f(this.u.uMaskType, 0);
+    gl.uniform1f(this.u.uWipe, -1); gl.uniform1f(this.u.uMaskType, 0); gl.uniform1f(this.u.uSecOn, 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
@@ -389,6 +433,32 @@ export function isNeutralColor(col) {
   const n = (c) => !c || ((c.color || '#808080').toLowerCase() === '#808080' && !c.lum);
   return n(col.shadows) && n(col.mids) && n(col.highlights);
 }
+/* ============ Qualificazione secondaria HSL ============ */
+function rgb2hue(h) {
+  const [r, g, b] = hexRGB(h);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (d < 1e-6) return 0;
+  let H;
+  if (mx === r) H = ((g - b) / d) % 6;
+  else if (mx === g) H = (b - r) / d + 2;
+  else H = (r - g) / d + 4;
+  H /= 6; if (H < 0) H += 1;
+  return H;
+}
+/* sec = {on, color, range, soft, satMin, dHue(°), dSat, dLum}; null se spento */
+export function computeSecondary(sec) {
+  if (!sec || !sec.on) return null;
+  return {
+    hue: rgb2hue(sec.color || '#ff0000'),
+    hueW: Math.max(0.005, sec.range ?? 0.08),
+    soft: Math.max(0, sec.soft ?? 0.08),
+    satMin: Math.max(0, Math.min(1, sec.satMin ?? 0.15)),
+    dHue: (sec.dHue ?? 0) / 360,
+    dSat: sec.dSat ?? 0,
+    dLum: sec.dLum ?? 0,
+  };
+}
+
 export function computeLGG(col) {
   if (!col || isNeutralColor(col)) return null;
   const off = (c) => { const v = hexRGB((c && c.color) || '#808080'); return [v[0] - 0.5, v[1] - 0.5, v[2] - 0.5]; };

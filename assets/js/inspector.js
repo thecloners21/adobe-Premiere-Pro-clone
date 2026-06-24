@@ -2,7 +2,7 @@
    inspector.js — pannello "Controllo effetti": effetti raggruppati,
    keyframe, transizioni, flip, editor titoli, audio.
    ===================================================================== */
-import { store, tc, evalParam, evalGain, EASINGS, clipDur, clipSpeed, defaultMask } from './state.js';
+import { store, tc, evalParam, evalGain, EASINGS, clipDur, clipSpeed, defaultMask, defaultSecondary } from './state.js';
 import { FX_PARAMS, FX_GROUPS, TRANSITIONS } from './effects.js';
 import { updateTitle, TITLE_FONTS, TITLE_STYLES, TITLE_ANIMS } from './media.js';
 import { mountCurveEditor } from './curveeditor.js';
@@ -31,6 +31,7 @@ export function renderInspector() {
     html += flipRow(clip);
     html += `<div class="fx-group"><div class="fx-title">Curve RGB</div><div id="curveMount"></div></div>`;
     html += colorBalanceGroup(clip);
+    html += secondaryGroup(clip);
     html += maskGroup(clip);
     html += transitionRow(clip);
   } else {
@@ -91,6 +92,31 @@ function colorBalanceGroup(clip) {
     ${row('mids', 'Mezzitoni')}
     ${row('highlights', 'Luci')}
     <button class="curve-reset" data-lgg-reset="1" style="width:100%;margin-top:6px">Reset bilanciamento</button>
+  </div>`;
+}
+
+/* qualificazione secondaria HSL: corregge solo una banda di tonalità */
+function secondaryGroup(clip) {
+  const s = clip.secondary || { on: false };
+  const on = !!s.on;
+  let rows = '';
+  if (on) {
+    const r = (label, key, val, min, max, step) => `<div class="fx-row"><label>${label}</label>
+        <input type="range" data-sec="${key}" min="${min}" max="${max}" step="${step}" value="${val}">
+        <span class="val">${fmt(val)}</span></div>`;
+    rows = `<div class="fx-row"><label>Colore chiave</label><input type="color" data-sec-color="1" value="${s.color || '#cc3030'}"><span></span></div>`
+      + r('Ampiezza ton.', 'range', s.range ?? 0.08, 0.005, 0.5, 0.005)
+      + r('Morbidezza', 'soft', s.soft ?? 0.08, 0, 0.3, 0.005)
+      + r('Saturazione min', 'satMin', s.satMin ?? 0.15, 0, 1, 0.01)
+      + `<div class="fx-title" style="margin-top:6px">Correzione</div>`
+      + r('Sposta tonalità', 'dHue', s.dHue ?? 0, -180, 180, 1)
+      + r('Saturazione', 'dSat', s.dSat ?? 0, -1, 1, 0.02)
+      + r('Luminosità', 'dLum', s.dLum ?? 0, -1, 1, 0.02);
+  }
+  return `<div class="fx-group"><div class="fx-title">Secondaria HSL</div>
+    <div class="toggle-row"><button class="tg${on ? ' on' : ''}" data-sec-toggle="1">${on ? 'Attiva' : 'Disattivata'}</button></div>
+    ${rows}
+    ${on ? '<p class="hint">Corregge solo i pixel nella banda di tonalità scelta. Anteprima ed export browser.</p>' : ''}
   </div>`;
 }
 
@@ -292,6 +318,25 @@ function wire(clip, m, track) {
     clip.color = { shadows: { color: '#808080', lum: 0 }, mids: { color: '#808080', lum: 0 }, highlights: { color: '#808080', lum: 0 } };
     store.emit('inspector');
   });
+
+  // secondaria HSL
+  const stog = box.querySelector('[data-sec-toggle]');
+  if (stog) stog.addEventListener('click', () => {
+    if (!clip.secondary) clip.secondary = defaultSecondary();
+    else clip.secondary.on = !clip.secondary.on;
+    renderInspector();
+  });
+  const scol = box.querySelector('[data-sec-color]');
+  if (scol) scol.addEventListener('input', () => {
+    if (!clip.secondary) clip.secondary = defaultSecondary();
+    clip.secondary.color = scol.value; store.emit('touch');
+  });
+  box.querySelectorAll('[data-sec]').forEach(inp => inp.addEventListener('input', () => {
+    if (!clip.secondary) clip.secondary = defaultSecondary();
+    clip.secondary[inp.dataset.sec] = parseFloat(inp.value);
+    inp.parentElement.querySelector('.val').textContent = fmt(parseFloat(inp.value));
+    store.emit('touch');
+  }));
 
   // maschera
   const mtype = box.querySelector('[data-mask-type]');

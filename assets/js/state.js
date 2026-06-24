@@ -59,12 +59,18 @@ export function makeClip(media, start, trackType) {
     curves: defaultCurves(),  // curve RGB di color grading
     color: defaultColor(),    // bilanciamento Lift/Gamma/Gain
     mask: null,               // maschera {type:'ellipse'|'rect',cx,cy,w,h,feather,invert}
+    secondary: null,          // qualificazione HSL {on,color,range,soft,satMin,dHue,dSat,dLum}
   };
 }
 
 /* maschera di default (ellisse centrata) */
 export function defaultMask() {
   return { type: 'ellipse', cx: 0.5, cy: 0.5, w: 0.35, h: 0.35, feather: 0.06, invert: false };
+}
+
+/* qualificazione secondaria HSL di default */
+export function defaultSecondary() {
+  return { on: true, color: '#cc3030', range: 0.08, soft: 0.08, satMin: 0.15, dHue: 0, dSat: 0, dLum: 0 };
 }
 
 /* ---- velocità clip ----
@@ -213,7 +219,7 @@ class Store {
         const cEnd = c.start + clipDur(c);
         if (t0 > c.start + 0.02 && t0 < cEnd - 0.02) {
           const cutSrc = srcAt(c, t0 - c.start);
-          const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})), ease: { ...(c.ease || {}) }, curves: JSON.parse(JSON.stringify(c.curves || {})), color: JSON.parse(JSON.stringify(c.color || {})), mask: c.mask ? JSON.parse(JSON.stringify(c.mask)) : null };
+          const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})), ease: { ...(c.ease || {}) }, curves: JSON.parse(JSON.stringify(c.curves || {})), color: JSON.parse(JSON.stringify(c.color || {})), mask: c.mask ? JSON.parse(JSON.stringify(c.mask)) : null, secondary: c.secondary ? JSON.parse(JSON.stringify(c.secondary)) : null };
           right.start = t0; right.in = cutSrc;
           c.out = cutSrc;
           t.clips.push(right);

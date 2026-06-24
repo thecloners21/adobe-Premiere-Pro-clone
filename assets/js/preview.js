@@ -5,7 +5,7 @@
 import { store, tc, resolvedParams, clipDur, clipSpeed, srcAt } from './state.js';
 import { runtime, titleAnimOpts, renderTitleCanvas } from './media.js';
 import { audio } from './audio.js';
-import { GLCompositor, buildCurveLUT, computeLGG } from './effects.js';
+import { GLCompositor, buildCurveLUT, computeLGG, computeSecondary } from './effects.js';
 import { seekExact } from './webcodecs.js';
 
 /* cache della LUT curve per clip (ricostruita solo quando cambiano le curve) */
@@ -30,6 +30,18 @@ function lggFor(clip) {
   const lgg = computeLGG(clip.color);
   lggCache.set(clip, { key, lgg });
   return lgg;
+}
+
+/* cache della qualificazione secondaria HSL per clip */
+const secCache = new WeakMap();
+function secFor(clip) {
+  if (!clip || !clip.secondary) return null;
+  const key = JSON.stringify(clip.secondary);
+  const e = secCache.get(clip);
+  if (e && e.key === key) return e.sec;
+  const sec = computeSecondary(clip.secondary);
+  secCache.set(clip, { key, sec });
+  return sec;
 }
 
 export const THEAD_W = 150;
@@ -252,6 +264,8 @@ function drawClip(clip, T, opts) {
   if (lut) o = { ...o, lut };
   const lgg = lggFor(clip);
   if (lgg) o = { ...o, lgg };
+  const sec = secFor(clip);
+  if (sec) o = { ...o, sec };
   if (clip.mask && clip.mask.type && clip.mask.type !== 'none') o = { ...o, mask: clip.mask };
   // animazioni titolo
   if (m && m.kind === 'title' && m.title) {
@@ -278,11 +292,11 @@ function drawTransition(track, trans, T) {
   if (!elA || !elB) { drawClip(B, T, {}); return; }
   alignEl(elA, A, T); alignEl(elB, B, T);
   const PA = resolvedParams(A, T - A.start), PB = resolvedParams(B, T - B.start);
-  const la = lutFor(A), lb = lutFor(B), ga = lggFor(A), gb = lggFor(B);
+  const la = lutFor(A), lb = lutFor(B), ga = lggFor(A), gb = lggFor(B), sa = secFor(A), sb = secFor(B);
   const mA = (A.mask && A.mask.type && A.mask.type !== 'none') ? A.mask : null;
   const mB = (B.mask && B.mask.type && B.mask.type !== 'none') ? B.mask : null;
-  const dA = (extra = {}) => comp.draw(elA, PA, { ...extra, ...(la ? { lut: la } : {}), ...(ga ? { lgg: ga } : {}), ...(mA ? { mask: mA } : {}) });
-  const dB = (extra = {}) => comp.draw(elB, PB, { ...extra, ...(lb ? { lut: lb } : {}), ...(gb ? { lgg: gb } : {}), ...(mB ? { mask: mB } : {}) });
+  const dA = (extra = {}) => comp.draw(elA, PA, { ...extra, ...(la ? { lut: la } : {}), ...(ga ? { lgg: ga } : {}), ...(sa ? { sec: sa } : {}), ...(mA ? { mask: mA } : {}) });
+  const dB = (extra = {}) => comp.draw(elB, PB, { ...extra, ...(lb ? { lut: lb } : {}), ...(gb ? { lgg: gb } : {}), ...(sb ? { sec: sb } : {}), ...(mB ? { mask: mB } : {}) });
 
   switch (type) {
     case 'dipblack':
