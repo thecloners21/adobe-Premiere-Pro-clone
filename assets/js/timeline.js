@@ -72,6 +72,7 @@ function renderTracks() {
       <div class="th-btns">
         <button data-b="M" class="${track.mute ? 'on' : ''}" title="Muto">M</button>
         <button data-b="S" class="${track.solo ? 'on' : ''}" title="Solo">S</button>
+        ${track.type === 'audio' ? `<button data-b="D" class="${track.duck ? 'on' : ''}" title="Ducking: abbassa questa traccia quando le altre hanno audio">D</button>` : ''}
       </div>`;
     head.querySelector('[data-b="M"]').addEventListener('click', () => {
       track.mute = !track.mute;
@@ -80,6 +81,10 @@ function renderTracks() {
     });
     head.querySelector('[data-b="S"]').addEventListener('click', () => {
       track.solo = !track.solo; store.emit('clips');
+    });
+    const duckBtn = head.querySelector('[data-b="D"]');
+    if (duckBtn) duckBtn.addEventListener('click', () => {
+      track.duck = !track.duck; store.emit('clips');
     });
 
     // lane

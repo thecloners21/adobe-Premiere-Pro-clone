@@ -7,7 +7,7 @@ import * as api from './api-client.js';
 
 /* I blob URL non sono serializzabili: salviamo solo i metadati media +
    eventuale serverSrc (caricato su server). */
-function serializable(project) {
+export function serializable(project) {
   const p = JSON.parse(JSON.stringify(project, (k, v) => (k === '_file' ? undefined : v)));
   // sostituisci src blob con serverSrc se presente
   for (const m of p.media) {

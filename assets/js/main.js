@@ -2,7 +2,7 @@
    main.js — bootstrap e wiring di tutta l'interfaccia
    ===================================================================== */
 import { store, newProject } from './state.js';
-import { importFiles, renderBin, createTitle } from './media.js';
+import { importFiles, renderBin, createTitle, rehydrateFromBlob, rehydrateTitle } from './media.js';
 import { renderTimeline } from './timeline.js';
 import { renderInspector, syncInspectorValues } from './inspector.js';
 import { startLoop, play, pause, toggle, seek, stepFrame, gotoStart, gotoEnd } from './preview.js';
@@ -12,6 +12,7 @@ import { runExport } from './export.js';
 import * as api from './api-client.js';
 import { audio } from './audio.js';
 import { renderLibraries, initLibraryTabs } from './library.js';
+import { saveProjectLocal, loadProjectLocal, clearProjectLocal, clearBlobs, getBlob } from './persist.js';
 
 /* ---------- toast ---------- */
 const toastEl = document.getElementById('toast');
@@ -31,6 +32,14 @@ store.on((reason) => {
   if (['select', 'inspector', 'clips', 'load'].includes(reason)) renderInspector();
   if (['media', 'load'].includes(reason)) renderBin();
   if (reason === 'seek') syncInspectorValues();
+});
+
+/* ---------- autosave locale (persistenza al refresh) ---------- */
+let autosaveTimer;
+store.on((reason) => {
+  if (!['clips', 'media', 'inspector', 'load'].includes(reason)) return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => saveProjectLocal(io.serializable(store.project)), 600);
 });
 
 /* ---------- tema ---------- */
@@ -63,6 +72,7 @@ document.querySelector('.menu').addEventListener('click', (e) => {
   switch (act) {
     case 'new':
       if (store.project.media.length && !confirm('Creare un nuovo progetto? Le modifiche non salvate andranno perse.')) return;
+      clearProjectLocal(); clearBlobs().catch(() => {});
       store.load(newProject()); projName.textContent = store.project.name; toast('Nuovo progetto'); break;
     case 'import': fileInput.click(); break;
     case 'title': createTitle(store.project); toast('Titolo creato — trascinalo in timeline', 'ok'); break;
@@ -99,8 +109,10 @@ projInput.addEventListener('change', () => {
 
 /* drag&drop file dal sistema sul media bin */
 const binList = document.getElementById('binList');
-['dragover', 'dragenter'].forEach(ev => binList.addEventListener(ev, e => { e.preventDefault(); }));
+['dragover', 'dragenter'].forEach(ev => binList.addEventListener(ev, e => { e.preventDefault(); binList.classList.add('drag-over'); }));
+['dragleave', 'dragend'].forEach(ev => binList.addEventListener(ev, () => binList.classList.remove('drag-over')));
 binList.addEventListener('drop', async (e) => {
+  binList.classList.remove('drag-over');
   if (!e.dataTransfer.files.length) return;
   e.preventDefault();
   await importFiles(e.dataTransfer.files);
@@ -232,4 +244,24 @@ renderBin();
 renderLibraries();
 initLibraryTabs();
 startLoop();
-toast('Pronto — importa un media per iniziare');
+
+/* ripristino del progetto dall'autosave locale (dopo un refresh) */
+(async function restoreLocal() {
+  const saved = loadProjectLocal();
+  if (!saved || !saved.tracks || !(saved.media && saved.media.length)) {
+    toast('Pronto — importa un media per iniziare');
+    return;
+  }
+  store.load(saved);
+  projName.textContent = saved.name || 'Progetto senza titolo';
+  let recovered = 0, missing = 0;
+  for (const m of saved.media) {
+    if (m.kind === 'title') { rehydrateTitle(m); recovered++; continue; }
+    const blob = await getBlob(m.id);
+    if (blob) { await rehydrateFromBlob(m, blob); recovered++; }
+    else missing++;
+  }
+  store.emit('load');
+  if (missing) toast(`Progetto ripristinato — ${missing} media non recuperati`, 'warn');
+  else toast(`Progetto ripristinato (${recovered} media)`, 'ok');
+})();

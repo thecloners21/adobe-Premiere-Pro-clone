@@ -56,7 +56,8 @@ automaticamente **nel browser** (vedi §10).
 - **Eliminare:** seleziona la clip e premi **🗑** (o `Canc`).
 - **Zoom:** cursore *Zoom* nella barra della timeline.
 
-**Testate traccia:** ogni traccia ha i pulsanti **M** (muto) e **S** (solo).
+**Testate traccia:** ogni traccia ha i pulsanti **M** (muto) e **S** (solo);
+le tracce **audio** hanno anche **D** (ducking, vedi §13).
 
 ---
 
@@ -165,7 +166,41 @@ Pulsante 🌙/☀️ nella barra superiore. La scelta viene ricordata.
 
 ---
 
-## 13. Limiti noti
+## 13. Audio avanzato (volume, pan, ducking, VU)
+
+Seleziona una **clip audio**: nel pannello *Controllo effetti* trovi il gruppo **Audio**.
+
+- **Volume con keyframe:** premi **◆** accanto a *Volume* per animare il volume nel
+  tempo (es. una dissolvenza manuale). Come per gli effetti, compare la curva di
+  **accelerazione** (Lineare/Ease In/Out…).
+- **Pan (L↔R):** sposta il suono a sinistra o a destra nel campo stereo.
+- **Fade in / Fade out:** dissolvenze automatiche d'ingresso/uscita.
+
+**Ducking automatico:** attiva **D** sulla testata di una traccia audio (es. la
+musica). Durante la riproduzione, quella traccia si **abbassa automaticamente**
+quando le **altre** tracce audio (es. la voce) hanno del suono, e torna su quando
+finiscono — come la funzione *Ducking* di Premiere.
+
+**VU meter:** nella barra di riproduzione, sotto il monitor, il **VU meter
+stereo** (L/R) mostra il livello d'uscita in tempo reale durante il play.
+
+---
+
+## 14. Persistenza automatica
+
+Il progetto viene **salvato automaticamente nel browser**: chiudendo o
+**ricaricando la pagina** ritrovi il montaggio com'era, **media inclusi**.
+
+- La *struttura* del progetto (clip, tagli, effetti, keyframe, titoli) è salvata
+  in `localStorage`; i *file media* sono conservati in **IndexedDB** e ricollegati
+  al riavvio.
+- Premendo **Nuovo** la cache locale viene azzerata.
+- Il salvataggio è locale a quel browser/computer: per portare il progetto
+  altrove usa **Salva** (server) o **Esporta progetto** (file).
+
+---
+
+## 15. Limiti noti
 
 - Editor con le funzioni core: non riproduce il 100% di Adobe Premiere Pro.
 - Export **server**: la dissolvenza `xfade` è applicata sulla traccia

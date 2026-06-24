@@ -3,6 +3,7 @@
    ===================================================================== */
 import { store, uid } from './state.js';
 import { audio } from './audio.js';
+import { putBlob } from './persist.js';
 
 const binList = document.getElementById('binList');
 const binCount = document.getElementById('binCount');
@@ -43,6 +44,7 @@ function importOne(file) {
     const finish = (rt) => {
       runtime.set(media.id, rt);
       store.addMedia(media);
+      putBlob(media.id, file).catch(() => {});   // persistenza per il refresh
       resolve(media);
     };
 
@@ -100,6 +102,40 @@ async function decodeAudio(media) {
   rt.audioBuffer = audioBuffer;
   runtime.set(media.id, rt);
   store.emit('audio-decoded');
+}
+
+/* ---------- reidratazione dopo il refresh ----------
+   Ricostruisce l'elemento runtime di un media già presente nel progetto,
+   a partire dal File recuperato da IndexedDB. */
+export function rehydrateFromBlob(media, file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    media.src = url; media._file = file;
+    if (media.kind === 'image') {
+      const img = new Image();
+      img.onload = () => { runtime.set(media.id, { element: img, objectURL: url, thumb: url }); resolve(); };
+      img.onerror = () => resolve();
+      img.src = url;
+      return;
+    }
+    const el = document.createElement(media.kind === 'audio' ? 'audio' : 'video');
+    el.preload = 'auto'; el.muted = true; el.src = url; el.crossOrigin = 'anonymous';
+    el.addEventListener('loadedmetadata', async () => {
+      let thumb = null;
+      if (media.kind === 'video') { try { thumb = await grabThumb(el); } catch (_) {} }
+      decodeAudio(media).catch(() => {});
+      runtime.set(media.id, { element: el, objectURL: url, thumb });
+      resolve();
+    }, { once: true });
+    el.addEventListener('error', () => resolve(), { once: true });
+  });
+}
+
+/* ricostruisce il canvas runtime di un titolo dopo il refresh */
+export function rehydrateTitle(media) {
+  const canvas = document.createElement('canvas');
+  renderTitleCanvas(canvas, media.title || defaultTitle(), media.width || 1280, media.height || 720);
+  runtime.set(media.id, { element: canvas, thumb: canvas.toDataURL('image/jpeg', 0.5) });
 }
 
 /* ---------- titoli / testo ---------- */

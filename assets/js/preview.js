@@ -15,6 +15,8 @@ const tcDisplay = document.getElementById('tcDisplay');
 const durDisplay = document.getElementById('durDisplay');
 const timelineEl = document.getElementById('timeline');
 const playheadEl = document.getElementById('playhead');
+const vuCanvas = document.getElementById('vuMeter');
+const vuCtx = vuCanvas ? vuCanvas.getContext('2d') : null;
 
 const comp = new GLCompositor(canvas);
 
@@ -49,6 +51,7 @@ export function play() {
     for (const c of t.clips) clips.push({ trackId: t.id, clip: c });
   }
   audio.play(clips, bufferFor, store.playhead);
+  applyDucking();
 
   // avvia gli elementi video attivi
   syncVideoElements(store.playhead, true);
@@ -96,6 +99,19 @@ function audioReschedule() {
     for (const c of t.clips) clips.push({ trackId: t.id, clip: c });
   }
   audio.play(clips, bufferFor, store.playhead);
+  applyDucking();
+}
+
+/* costruisce gli intervalli di "voce" e fa abbassare le tracce con ducking attivo */
+function applyDucking() {
+  const duckIds = store.audioTracks().filter(t => t.duck && !t.mute).map(t => t.id);
+  if (!duckIds.length) return;
+  const intervals = [];
+  for (const t of store.audioTracks()) {
+    if (t.duck || t.mute) continue;          // le tracce non-ducked sono i trigger
+    for (const c of t.clips) intervals.push([c.start, c.start + (c.out - c.in)]);
+  }
+  audio.applyDucking(duckIds, intervals, store.playhead, store.duration());
 }
 
 /* allinea gli elementi video al tempo T (per play o scrub) */
@@ -149,8 +165,34 @@ function renderFrame() {
   tcDisplay.textContent = tc(store.playhead, store.project.fps);
   durDisplay.textContent = 'Durata ' + tc(dur, store.project.fps);
   updatePlayheadUI();
+  drawVU();
 
   requestAnimationFrame(renderFrame);
+}
+
+/* VU meter stereo a barre con segmenti */
+function drawVU() {
+  if (!vuCtx) return;
+  const { l, r } = audio.getLevels();
+  const w = vuCanvas.width, h = vuCanvas.height;
+  vuCtx.clearRect(0, 0, w, h);
+  const gap = 2, barH = (h - gap) / 2;
+  const seg = 3, segGap = 1, n = Math.floor(w / (seg + segGap));
+  const draw = (level, y) => {
+    const lit = Math.round(level * n);
+    for (let i = 0; i < n; i++) {
+      const on = i < lit;
+      const frac = i / n;
+      let col;
+      if (frac > 0.85) col = on ? '#ff5b5b' : '#3a2326';
+      else if (frac > 0.6) col = on ? '#ffd24a' : '#3a3622';
+      else col = on ? '#43d17a' : '#1f2e26';
+      vuCtx.fillStyle = col;
+      vuCtx.fillRect(i * (seg + segGap), y, seg, barH);
+    }
+  };
+  draw(l, 0);
+  draw(r, barH + gap);
 }
 
 /* mantiene un elemento video allineato durante il play */

@@ -35,6 +35,7 @@ export function makeClip(media, start, trackType) {
     in: 0,
     out: dur,
     gain: 1,
+    pan: 0,                   // panoramica stereo audio (-1 = sinistra, +1 = destra)
     fadeIn: 0,
     fadeOut: 0,
     transType: 'dissolve',    // tipo transizione in entrata (quando sovrapposta alla precedente)
@@ -78,6 +79,24 @@ export function evalParam(clip, key, localT) {
     }
   }
   return clip.fx ? (clip.fx[key] ?? 0) : 0;
+}
+
+/* valuta il volume audio (keyframe + easing) a localT; fallback su clip.gain */
+export function evalGain(clip, localT) {
+  const kfs = clip.kf && clip.kf.gain;
+  if (kfs && kfs.length) {
+    if (localT <= kfs[0].t) return kfs[0].v;
+    if (localT >= kfs[kfs.length - 1].t) return kfs[kfs.length - 1].v;
+    const ease = (clip.ease && clip.ease.gain) || 'linear';
+    for (let i = 0; i < kfs.length - 1; i++) {
+      const a = kfs[i], b = kfs[i + 1];
+      if (localT >= a.t && localT <= b.t) {
+        const p = (localT - a.t) / Math.max(1e-6, b.t - a.t);
+        return a.v + (b.v - a.v) * applyEase(p, ease);
+      }
+    }
+  }
+  return clip.gain ?? 1;
 }
 
 /* tutti i parametri risolti a localT (per il compositor) */

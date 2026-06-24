@@ -2,7 +2,7 @@
    inspector.js — pannello "Controllo effetti": effetti raggruppati,
    keyframe, transizioni, flip, editor titoli, audio.
    ===================================================================== */
-import { store, tc, evalParam, EASINGS } from './state.js';
+import { store, tc, evalParam, evalGain, EASINGS } from './state.js';
 import { FX_PARAMS, FX_GROUPS, TRANSITIONS } from './effects.js';
 import { updateTitle } from './media.js';
 
@@ -74,8 +74,21 @@ function transitionRow(clip) {
 }
 
 function audioGroup(clip) {
+  const kfd = clip.kf && clip.kf.gain && clip.kf.gain.length;
+  const gv = evalGain(clip, localT(clip));
+  let vol = `<div class="fx-row kf-row">
+      <label>Volume</label>
+      <button class="kf-btn${kfd ? ' on' : ''}" data-kfaudio="gain" title="Keyframe volume al playhead">◆</button>
+      <input type="range" data-scope="audio" data-k="gain" min="0" max="2" step="0.01" value="${gv}">
+      <span class="val">${fmt(gv)}</span></div>`;
+  if (kfd) {
+    const cur = (clip.ease && clip.ease.gain) || 'linear';
+    const opts = EASINGS.map(e => `<option value="${e.key}" ${cur === e.key ? 'selected' : ''}>${e.label}</option>`).join('');
+    vol += `<div class="fx-ease"><span>↳ accelerazione</span><select data-easeaudio="gain">${opts}</select></div>`;
+  }
   return `<div class="fx-group"><div class="fx-title">Audio</div>
-      ${clipRange('Volume', 'gain', clip.gain, 0, 2, 0.01)}
+      ${vol}
+      ${clipRange('Pan (L↔R)', 'pan', clip.pan ?? 0, -1, 1, 0.01)}
       ${clipRange('Fade in', 'fadeIn', clip.fadeIn, 0, 5, 0.05)}
       ${clipRange('Fade out', 'fadeOut', clip.fadeOut, 0, 5, 0.05)}
     </div>`;
@@ -111,13 +124,17 @@ function wire(clip, m, track) {
       if (scope === 'fx') {
         if (clip.kf && clip.kf[key] && clip.kf[key].length) addKf(clip, key, localT(clip), v);
         else clip.fx[key] = v;
+      } else if (scope === 'audio') {
+        // volume con keyframe (se attivi) altrimenti volume base
+        if (clip.kf && clip.kf.gain && clip.kf.gain.length) addKf(clip, 'gain', localT(clip), v);
+        else clip.gain = v;
       } else clip[key] = v;
       inp.parentElement.querySelector('.val').textContent = fmt(v);
       store.emit('inspector');
     });
   });
-  // keyframe diamanti
-  box.querySelectorAll('.kf-btn').forEach(btn => {
+  // keyframe diamanti (fx)
+  box.querySelectorAll('.kf-btn[data-kf]').forEach(btn => {
     btn.addEventListener('click', () => {
       const key = btn.dataset.kf;
       const v = evalParam(clip, key, localT(clip));
@@ -126,10 +143,25 @@ function wire(clip, m, track) {
       store.emit('inspector');
     });
   });
-  // easing keyframe
+  // keyframe diamante (volume audio)
+  box.querySelectorAll('.kf-btn[data-kfaudio]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = evalGain(clip, localT(clip));
+      addKf(clip, 'gain', localT(clip), v);
+      btn.classList.add('on');
+      store.emit('inspector');
+    });
+  });
+  // easing keyframe (fx)
   box.querySelectorAll('[data-ease]').forEach(sel => sel.addEventListener('change', () => {
     if (!clip.ease) clip.ease = {};
     clip.ease[sel.dataset.ease] = sel.value;
+    store.emit('inspector');
+  }));
+  // easing keyframe (volume audio)
+  box.querySelectorAll('[data-easeaudio]').forEach(sel => sel.addEventListener('change', () => {
+    if (!clip.ease) clip.ease = {};
+    clip.ease.gain = sel.value;
     store.emit('inspector');
   }));
   // flip
@@ -164,6 +196,11 @@ export function syncInspectorValues() {
     const v = evalParam(clip, inp.dataset.k, t);
     inp.value = v; inp.parentElement.querySelector('.val').textContent = fmt(v);
   });
+  const av = box.querySelector('input[type=range][data-scope="audio"][data-k="gain"]');
+  if (av && document.activeElement !== av && clip.kf && clip.kf.gain && clip.kf.gain.length) {
+    const v = evalGain(clip, t);
+    av.value = v; av.parentElement.querySelector('.val').textContent = fmt(v);
+  }
 }
 
 function addKf(clip, key, t, v) {

@@ -181,6 +181,15 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   margin: auto; text-align: center; color: var(--text-mute);
   font-size: 11.5px; line-height: 1.7; padding: 20px;
 }
+/* drop-zone del media bin: area ampia e ben visibile */
+.bin-list .empty {
+  margin: 8px; flex: 1 1 auto; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  border: 2px dashed var(--line-soft); border-radius: 8px;
+  background: rgba(255,255,255,.015); font-size: 12.5px; min-height: 160px;
+}
+.bin-list .empty b { color: var(--text-dim); }
+.bin-list.drag-over .empty { border-color: var(--accent); background: rgba(45,140,235,.08); color: var(--text-dim); }
 
 /* ---- Schede libreria (Media/Effetti/Transizioni) ---- */
 .panel-head.lib-tabs { padding: 0; gap: 0; }
@@ -192,14 +201,18 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .lib-tab:hover { color: var(--text-dim); }
 .lib-tab.active { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
 
-.lib-list { flex: 1 1 auto; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+.lib-list {
+  flex: 1 1 auto; overflow-y: auto; padding: 8px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; align-content: start;
+}
 .lib-item {
-  display: flex; align-items: center; gap: 9px; padding: 5px; border-radius: 5px;
-  background: var(--panel-bg-2); border: 1px solid transparent; cursor: pointer; text-align: left; width: 100%;
+  display: flex; flex-direction: column; gap: 5px; padding: 5px; border-radius: 5px;
+  background: var(--panel-bg-2); border: 1px solid transparent; cursor: pointer; text-align: center; width: 100%;
 }
 .lib-item:hover { border-color: var(--line-soft); background: #26262c; }
-.lib-thumb { width: 46px; height: 28px; border-radius: 3px; flex: 0 0 auto; border: 1px solid var(--line); }
-.lib-name { font-size: 11.5px; color: var(--text); }
+.lib-thumb { width: 100%; height: 40px; border-radius: 3px; flex: 0 0 auto; border: 1px solid var(--line); }
+.lib-name { font-size: 11px; color: var(--text-dim); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-item:hover .lib-name { color: var(--text); }
 .trans-thumb { background: linear-gradient(90deg,#3a6aa8 0%,#d2a8ff 100%); }
 .trans-thumb[data-t="dipblack"]  { background: linear-gradient(90deg,#3a6aa8,#000 50%,#d2a8ff); }
 .trans-thumb[data-t="dipwhite"]  { background: linear-gradient(90deg,#3a6aa8,#fff 50%,#d2a8ff); }
@@ -264,6 +277,11 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .transport button[data-tp="split"],
 .transport button[data-tp="del"] { width: auto; padding: 0 10px; font-size: 11px; }
 .transport .sep { width: 1px; height: 22px; background: var(--line-soft); margin: 0 6px; }
+.vu-wrap {
+  margin-left: 10px; padding: 2px; border-radius: 4px;
+  background: #0c0c0e; border: 1px solid var(--line); display: inline-flex;
+}
+#vuMeter { display: block; }
 
 /* ---- Inspector / effects ---- */
 .inspector-body { flex: 1 1 auto; overflow-y: auto; padding: 10px; }
