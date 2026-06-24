@@ -97,6 +97,12 @@ Lumetri: alza i mezzitoni per schiarire, crea una "S" per più contrasto, agisci
 sui singoli canali per virare il colore. *Reset canale* / *Reset tutto* azzerano.
 Le curve si vedono in anteprima e nell'export browser.
 
+**Bilanciamento colore (Lift/Gamma/Gain):** sotto le curve, regola separatamente
+**Ombre**, **Mezzitoni** e **Luci**. Per ciascuno: il **campione di colore** vira
+quella fascia tonale (es. ombre verso il blu per un look freddo), lo **slider**
+ne alza/abbassa la luminosità. È l'equivalente delle *ruote colore* di Lumetri.
+*Reset bilanciamento* riporta tutto a neutro.
+
 ---
 
 ## 7. Keyframe (animazione degli effetti)

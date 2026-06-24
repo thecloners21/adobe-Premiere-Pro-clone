@@ -32,6 +32,12 @@ export function defaultCurves() {
   return { rgb: id(), r: id(), g: id(), b: id() };
 }
 
+/* bilanciamento colore neutro (ombre/mezzitoni/luci) */
+export function defaultColor() {
+  const n = () => ({ color: '#808080', lum: 0 });
+  return { shadows: n(), mids: n(), highlights: n() };
+}
+
 /* clip: {id, mediaId, start, in, out, gain, fadeIn, fadeOut, transType, fx{...}, kf{...}, curves{...}} */
 export function makeClip(media, start, trackType) {
   const dur = media.duration || (media.kind === 'image' || media.kind === 'title' ? 5 : 0);
@@ -50,6 +56,7 @@ export function makeClip(media, start, trackType) {
     kf: {},                   // keyframe per parametro: { key: [{t,v}, ...] } (t = secondi dall'inizio clip)
     ease: {},                 // easing per parametro keyframato: { key: 'linear'|'in'|'out'|'inout'|'hold' }
     curves: defaultCurves(),  // curve RGB di color grading
+    color: defaultColor(),    // bilanciamento Lift/Gamma/Gain
   };
 }
 
@@ -192,7 +199,7 @@ class Store {
         const cEnd = c.start + (c.out - c.in);
         if (t0 > c.start + 0.02 && t0 < cEnd - 0.02) {
           const cutSrc = c.in + (t0 - c.start);
-          const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})), ease: { ...(c.ease || {}) }, curves: JSON.parse(JSON.stringify(c.curves || {})) };
+          const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})), ease: { ...(c.ease || {}) }, curves: JSON.parse(JSON.stringify(c.curves || {})), color: JSON.parse(JSON.stringify(c.color || {})) };
           right.start = t0; right.in = cutSrc;
           c.out = cutSrc;
           t.clips.push(right);

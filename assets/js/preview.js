@@ -5,7 +5,7 @@
 import { store, tc, resolvedParams } from './state.js';
 import { runtime, titleAnimOpts, renderTitleCanvas } from './media.js';
 import { audio } from './audio.js';
-import { GLCompositor, buildCurveLUT } from './effects.js';
+import { GLCompositor, buildCurveLUT, computeLGG } from './effects.js';
 import { seekExact } from './webcodecs.js';
 
 /* cache della LUT curve per clip (ricostruita solo quando cambiano le curve) */
@@ -18,6 +18,18 @@ function lutFor(clip) {
   const lut = buildCurveLUT(clip.curves);
   lutCache.set(clip, { key, lut });
   return lut;
+}
+
+/* cache del bilanciamento Lift/Gamma/Gain per clip */
+const lggCache = new WeakMap();
+function lggFor(clip) {
+  if (!clip || !clip.color) return null;
+  const key = JSON.stringify(clip.color);
+  const e = lggCache.get(clip);
+  if (e && e.key === key) return e.lgg;
+  const lgg = computeLGG(clip.color);
+  lggCache.set(clip, { key, lgg });
+  return lgg;
 }
 
 export const THEAD_W = 150;
@@ -236,6 +248,8 @@ function drawClip(clip, T, opts) {
   let o = opts || {};
   const lut = lutFor(clip);
   if (lut) o = { ...o, lut };
+  const lgg = lggFor(clip);
+  if (lgg) o = { ...o, lgg };
   // animazioni titolo
   if (m && m.kind === 'title' && m.title) {
     const ao = titleAnimOpts(m.title, localT, clip.out - clip.in);
@@ -261,9 +275,9 @@ function drawTransition(track, trans, T) {
   if (!elA || !elB) { drawClip(B, T, {}); return; }
   alignEl(elA, A, T); alignEl(elB, B, T);
   const PA = resolvedParams(A, T - A.start), PB = resolvedParams(B, T - B.start);
-  const la = lutFor(A), lb = lutFor(B);
-  const dA = (extra = {}) => comp.draw(elA, PA, la ? { ...extra, lut: la } : extra);
-  const dB = (extra = {}) => comp.draw(elB, PB, lb ? { ...extra, lut: lb } : extra);
+  const la = lutFor(A), lb = lutFor(B), ga = lggFor(A), gb = lggFor(B);
+  const dA = (extra = {}) => comp.draw(elA, PA, { ...extra, ...(la ? { lut: la } : {}), ...(ga ? { lgg: ga } : {}) });
+  const dB = (extra = {}) => comp.draw(elB, PB, { ...extra, ...(lb ? { lut: lb } : {}), ...(gb ? { lgg: gb } : {}) });
 
   switch (type) {
     case 'dipblack':

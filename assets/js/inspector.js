@@ -29,6 +29,7 @@ export function renderInspector() {
     for (const g of FX_GROUPS) html += fxGroup(clip, g);
     html += flipRow(clip);
     html += `<div class="fx-group"><div class="fx-title">Curve RGB</div><div id="curveMount"></div></div>`;
+    html += colorBalanceGroup(clip);
     html += transitionRow(clip);
   } else {
     html += audioGroup(clip);
@@ -70,6 +71,25 @@ function flipRow(clip) {
       <button class="tg${clip.fx.flipH ? ' on' : ''}" data-flip="flipH">Orizzontale</button>
       <button class="tg${clip.fx.flipV ? ' on' : ''}" data-flip="flipV">Verticale</button>
     </div></div>`;
+}
+
+function colorBalanceGroup(clip) {
+  if (!clip.color) clip.color = { shadows: { color: '#808080', lum: 0 }, mids: { color: '#808080', lum: 0 }, highlights: { color: '#808080', lum: 0 } };
+  const c = clip.color;
+  const row = (key, label) => {
+    const r = c[key] || { color: '#808080', lum: 0 };
+    return `<div class="lgg-row">
+      <span class="lgg-label">${label}</span>
+      <input type="color" data-lgg-color="${key}" value="${r.color || '#808080'}">
+      <input type="range" data-lgg-lum="${key}" min="-1" max="1" step="0.02" value="${r.lum || 0}">
+    </div>`;
+  };
+  return `<div class="fx-group"><div class="fx-title">Bilanciamento colore</div>
+    ${row('shadows', 'Ombre')}
+    ${row('mids', 'Mezzitoni')}
+    ${row('highlights', 'Luci')}
+    <button class="curve-reset" data-lgg-reset="1" style="width:100%;margin-top:6px">Reset bilanciamento</button>
+  </div>`;
 }
 
 function transitionRow(clip) {
@@ -200,6 +220,19 @@ function wire(clip, m, track) {
   // transizione
   const ts = box.querySelector('[data-trans]');
   if (ts) ts.addEventListener('change', () => { clip.transType = ts.value; store.emit('clips'); });
+
+  // bilanciamento colore (Lift/Gamma/Gain) — aggiorna senza ricostruire l'inspector
+  box.querySelectorAll('[data-lgg-color]').forEach(inp => inp.addEventListener('input', () => {
+    const k = inp.dataset.lggColor; (clip.color[k] || (clip.color[k] = {})).color = inp.value; store.emit('touch');
+  }));
+  box.querySelectorAll('[data-lgg-lum]').forEach(inp => inp.addEventListener('input', () => {
+    const k = inp.dataset.lggLum; (clip.color[k] || (clip.color[k] = {})).lum = parseFloat(inp.value); store.emit('touch');
+  }));
+  const lggR = box.querySelector('[data-lgg-reset]');
+  if (lggR) lggR.addEventListener('click', () => {
+    clip.color = { shadows: { color: '#808080', lum: 0 }, mids: { color: '#808080', lum: 0 }, highlights: { color: '#808080', lum: 0 } };
+    store.emit('inspector');
+  });
 
   // titolo
   if (m && m.kind === 'title') {

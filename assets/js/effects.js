@@ -80,6 +80,7 @@ uniform float uBright, uContrast, uSat, uExposure, uHue, uTemp, uTint;
 uniform float uVignette, uGray, uSepia, uBlur, uSharpen, uOpacity;
 uniform float uWipe; uniform vec2 uWipeDir;
 uniform sampler2D uLUT; uniform float uUseLUT;   // curve RGB (color grading)
+uniform vec3 uLift, uGamma, uGain; uniform float uUseLGG; // bilanciamento Lift/Gamma/Gain
 
 vec3 hueRotate(vec3 col, float ang) {
   float c = cos(ang), s = sin(ang);
@@ -129,6 +130,11 @@ void main() {
   c.rgb = mix(vec3(l), c.rgb, 1.0 + uSat);
   // temperatura / tinta
   c.r += uTemp * 0.15; c.b -= uTemp * 0.15; c.g += uTint * 0.15;
+  // bilanciamento colore Lift / Gamma / Gain (ombre/mezzitoni/luci)
+  if (uUseLGG > 0.5) {
+    c.rgb = c.rgb * uGain + uLift;
+    c.rgb = pow(max(c.rgb, 0.0), 1.0 / uGamma);
+  }
   // curve RGB (color grading) — LUT 256x1
   c.rgb = clamp(c.rgb, 0.0, 1.0);
   if (uUseLUT > 0.5) {
@@ -174,7 +180,8 @@ export class GLCompositor {
     this.u = {};
     for (const n of ['uScale','uTrans','uRot','uFlip','uAspect','uSlide','uTexel','uSolid','uColor',
       'uBright','uContrast','uSat','uExposure','uHue','uTemp','uTint','uVignette','uGray','uSepia',
-      'uBlur','uSharpen','uOpacity','uWipe','uWipeDir','uTex','uLUT','uUseLUT'])
+      'uBlur','uSharpen','uOpacity','uWipe','uWipeDir','uTex','uLUT','uUseLUT',
+      'uLift','uGamma','uGain','uUseLGG'])
       this.u[n] = gl.getUniformLocation(this.prog, n);
 
     this.tex = gl.createTexture();
@@ -225,6 +232,15 @@ export class GLCompositor {
       gl.activeTexture(gl.TEXTURE0);
     } else {
       gl.uniform1f(this.u.uUseLUT, 0);
+    }
+    // bilanciamento Lift/Gamma/Gain
+    if (opts.lgg) {
+      gl.uniform3f(this.u.uLift, opts.lgg.lift[0], opts.lgg.lift[1], opts.lgg.lift[2]);
+      gl.uniform3f(this.u.uGamma, opts.lgg.gamma[0], opts.lgg.gamma[1], opts.lgg.gamma[2]);
+      gl.uniform3f(this.u.uGain, opts.lgg.gain[0], opts.lgg.gain[1], opts.lgg.gain[2]);
+      gl.uniform1f(this.u.uUseLGG, 1);
+    } else {
+      gl.uniform1f(this.u.uUseLGG, 0);
     }
     gl.uniform1f(this.u.uScale, P.scale ?? 1);
     gl.uniform2f(this.u.uTrans, (P.posX ?? 0), -(P.posY ?? 0));
@@ -331,4 +347,25 @@ export function buildCurveLUT(curves) {
     lut[i * 4 + 3] = 255;
   }
   return lut;
+}
+
+/* ============ Bilanciamento colore Lift / Gamma / Gain ============ */
+function hexRGB(h) {
+  h = String(h || '#808080').replace('#', '');
+  return [parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255];
+}
+export function isNeutralColor(col) {
+  if (!col) return true;
+  const n = (c) => !c || ((c.color || '#808080').toLowerCase() === '#808080' && !c.lum);
+  return n(col.shadows) && n(col.mids) && n(col.highlights);
+}
+export function computeLGG(col) {
+  if (!col || isNeutralColor(col)) return null;
+  const off = (c) => { const v = hexRGB((c && c.color) || '#808080'); return [v[0] - 0.5, v[1] - 0.5, v[2] - 0.5]; };
+  const s = col.shadows || {}, m = col.mids || {}, h = col.highlights || {};
+  const so = off(s), mo = off(m), ho = off(h);
+  const lift = [0, 1, 2].map(i => (s.lum || 0) * 0.25 + so[i] * 0.6);
+  const gain = [0, 1, 2].map(i => 1 + (h.lum || 0) * 0.5 + ho[i] * 0.8);
+  const gamma = [0, 1, 2].map(i => Math.max(0.2, 1 + (m.lum || 0) * 0.6 + mo[i] * 1.0));
+  return { lift, gain, gamma };
 }
