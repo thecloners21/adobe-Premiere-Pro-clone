@@ -15,18 +15,28 @@ sul server, render ffmpeg — usano automaticamente il fallback nel browser.)*
 
 ## ✨ Funzioni
 - **Timeline multitraccia**: drag & drop, trim, taglio, spostamento, snap, zoom.
-- **Anteprima in tempo reale** con compositing WebGL.
+- **Strumenti pro**: **Ripple, Roll, Slip, Slide**, **marcatori** e **magnete**
+  (snap) attivabile/disattivabile.
+- **Anteprima in tempo reale** con compositing WebGL e **seek frame-accurate**
+  (WebCodecs / `requestVideoFrameCallback`).
 - **Effetti** (shader): Movimento (posizione/scala/rotazione/flip/opacità),
   Colore (luminosità/contrasto/saturazione/esposizione/tonalità/temperatura/tinta),
   Stile (sfocatura/nitidezza/vignettatura/B&N/seppia).
-- **Keyframe** su tutti i parametri (interpolazione).
+- **Libreria** Effetti e Transizioni con anteprime, applicabili con un clic.
+- **Keyframe** su tutti i parametri, con **curve di accelerazione** (easing/Bézier).
 - **Transizioni** vere: dissolvenza incrociata, al nero, al bianco, tendina,
   scorrimento, spinta (server via `xfade`).
-- **Titoli/testo** sovrapponibili.
-- **Audio**: mixer Web Audio, volume/fade, waveform.
+- **Titoli avanzati**: stili preset, 10 font, contorno, banda *lower-third*,
+  e **animazioni** (dissolvenze, scorrimenti, zoom, *macchina da scrivere*).
+- **Audio avanzato**: mixer Web Audio, **keyframe di volume** con easing,
+  **pan** stereo, **ducking** automatico, **VU meter**, fade, waveform.
+- **Proxy** a bassa risoluzione per un editing fluido (export sempre a piena qualità).
 - **Export video** MP4/WebM (server ffmpeg o browser MediaRecorder).
 - **Progetti**: salva/apri (SQLite), import/export `.cpproj`, **FCPXML**, **EDL**.
-- **Tema** chiaro/scuro.
+- **Persistenza automatica**: il progetto (media inclusi) sopravvive al refresh
+  (localStorage + IndexedDB).
+- **Impostazioni**: sequenza (fps/risoluzione/sample rate), motore di render +
+  **URL server ffmpeg**, proxy, **tema chiaro/scuro**.
 
 ## 🚀 Avvio
 > Non aprire `index.html` con doppio click (i moduli ES sono bloccati da `file://`).
