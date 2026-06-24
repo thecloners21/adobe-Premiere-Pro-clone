@@ -15,8 +15,9 @@ export function newProject(name = 'Progetto senza titolo') {
     width: 1280,
     height: 720,
     sampleRate: 48000,
-    media: [],          // {id,name,kind:'video'|'audio'|'image',src,duration,width,height,hasAudio}
+    media: [],          // {id,name,kind:'video'|'audio'|'image'|'title'|'sequence',src,duration,width,height,hasAudio}
     markers: [],        // {id,t,label}
+    nests: [],          // sequenze annidate: {id,name,tracks:[...]}
     tracks: [
       { id: uid('v'), type: 'video', name: 'V2', clips: [], mute: false, solo: false },
       { id: uid('v'), type: 'video', name: 'V1', clips: [], mute: false, solo: false },

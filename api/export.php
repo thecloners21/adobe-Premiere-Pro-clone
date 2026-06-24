@@ -72,6 +72,7 @@ foreach ($project['tracks'] as $t) {
         $m = $mediaById[$c['mediaId']] ?? null;
         if (!$m) continue;
         if (($m['kind'] ?? '') === 'title') continue; // generato via filtro, niente input
+        if (($m['kind'] ?? '') === 'sequence') continue; // sequenze annidate: solo export browser
         $path = media_path($m);
         if (!$path) json_out(['ok' => false, 'error' => 'media non sul server: ' . ($m['name'] ?? '')], 422);
         $dur = $cdur($c);
@@ -232,6 +233,7 @@ if ($mainTrack) {
     usort($clips, fn($a, $b) => $a['start'] <=> $b['start']);
     foreach ($clips as $c) {
         $m = $mediaById[$c['mediaId']] ?? null; if (!$m) continue;
+        if (($m['kind'] ?? '') === 'sequence') continue;   // nesting: solo export browser
         $segDur = $cdur($c);
         $seg = $buildClip($c, $m, false);
         if ($base === null) {
@@ -280,6 +282,7 @@ foreach ($upper as $t) {
     usort($clips, fn($a, $b) => $a['start'] <=> $b['start']);
     foreach ($clips as $idx => $c) {
         $m = $mediaById[$c['mediaId']] ?? null; if (!$m) continue;
+        if (($m['kind'] ?? '') === 'sequence') continue;   // nesting: solo export browser
         $S = (float)$c['start']; $segDur = $cdur($c); $E = $S + $segDur;
         $seg = $buildClip($c, $m, true);
 

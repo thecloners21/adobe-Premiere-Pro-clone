@@ -1,7 +1,7 @@
 /* =====================================================================
    media.js — import file, decode metadati, thumbnail, media bin
    ===================================================================== */
-import { store, uid } from './state.js';
+import { store, uid, newProject, makeClip } from './state.js';
 import { audio } from './audio.js';
 import { putBlob, deleteBlob } from './persist.js';
 import { makeProxy } from './webcodecs.js';
@@ -257,6 +257,58 @@ export function createTitle(project) {
   store.addMedia(media);
   renderBin();
   return media;
+}
+
+/* ---------- sequenze annidate (nesting) ---------- */
+let _nestN = 0;
+
+/* miniatura/segnaposto per una clip-sequenza */
+function sequenceThumb(W = 1280, H = 720) {
+  const c = document.createElement('canvas'); c.width = 104; c.height = 64;
+  const x = c.getContext('2d');
+  x.fillStyle = '#2a2440'; x.fillRect(0, 0, c.width, c.height);
+  x.strokeStyle = '#6a5acd'; x.lineWidth = 2; x.strokeRect(3, 3, c.width - 6, c.height - 6);
+  x.fillStyle = '#bcaef0'; x.font = 'bold 13px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('⧉ SEQ', c.width / 2, c.height / 2);
+  return c.toDataURL('image/jpeg', 0.6);
+}
+
+/* collassa l'intera timeline corrente in una sequenza annidata e la mette
+   come singola clip su V1 (come "Nest" di Premiere applicato alla sequenza). */
+export function createNestFromTimeline(project) {
+  const dur = store.duration();
+  if (dur <= 0) { window.__toast && window.__toast('Timeline vuota: niente da annidare', 'err'); return null; }
+  const nest = {
+    id: uid('nest'),
+    name: 'Sequenza annidata ' + (++_nestN),
+    tracks: JSON.parse(JSON.stringify(project.tracks)),
+  };
+  if (!project.nests) project.nests = [];
+  project.nests.push(nest);
+
+  const hasAudio = nest.tracks.some(t => t.type === 'audio' && t.clips.length)
+    || nest.tracks.some(t => t.clips.some(c => { const m = store.media(c.mediaId); return m && m.hasAudio; }));
+  const media = {
+    id: uid('m'), name: nest.name, kind: 'sequence', src: '',
+    duration: dur, width: project.width, height: project.height, hasAudio, nestId: nest.id,
+  };
+  runtime.set(media.id, { element: null, thumb: sequenceThumb(project.width, project.height) });
+  project.media.push(media);
+
+  // nuova timeline pulita con la sequenza come unica clip su V1
+  project.tracks = newProject().tracks;
+  const v1 = project.tracks.find(t => t.type === 'video' && t.name === 'V1') || project.tracks.find(t => t.type === 'video');
+  v1.clips.push(makeClip(media, 0, 'video'));
+
+  store.selectedClip = null;
+  store.emit('load');
+  window.__toast && window.__toast('Sequenza annidata creata', 'ok');
+  return media;
+}
+
+/* ricostruisce il runtime di una clip-sequenza dopo il refresh */
+export function rehydrateSequence(media) {
+  runtime.set(media.id, { element: null, thumb: sequenceThumb(media.width || 1280, media.height || 720) });
 }
 
 export function updateTitle(media) {

@@ -79,6 +79,74 @@ function bufferFor(mediaId) {
   return rt ? rt.audioBuffer : null;
 }
 
+/* ----------------- sequenze annidate (nesting) ----------------- */
+/* pool di compositori offscreen, uno per "slot" attivo nel frame corrente */
+const nestComps = [];
+let nestRenderIdx = 0;
+function getNestComp(slot) {
+  const W = store.project.width, H = store.project.height;
+  if (!nestComps[slot]) {
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    nestComps[slot] = new GLCompositor(cv);
+  }
+  const c = nestComps[slot];
+  if (c.canvas.width !== W || c.canvas.height !== H) { c.canvas.width = W; c.canvas.height = H; }
+  return c;
+}
+
+/* renderizza un frame della sequenza annidata in un canvas offscreen e lo restituisce */
+function renderNestFrame(seqMedia, nestT, depth) {
+  if (depth > 5) return null;
+  const nest = (store.project.nests || []).find(n => n.id === seqMedia.nestId);
+  if (!nest) return null;
+  const c = getNestComp(nestRenderIdx++);
+  if (!c.ok) return null;
+  c.clear();
+  for (const track of nest.tracks.filter(t => t.type === 'video').slice().reverse()) {
+    if (track.mute) continue;
+    const trans = store.transitionAt(track, nestT);
+    if (trans) { drawTransition(track, trans, nestT, c, depth + 1); continue; }
+    const clip = store.clipAt(track, nestT);
+    if (clip) drawClip(clip, nestT, {}, c, depth + 1);
+  }
+  return c.canvas;
+}
+
+/* risolve l'elemento sorgente di una clip (canvas per le sequenze, altrimenti video/img) */
+function resolveEl(clip, T, depth) {
+  const m = store.media(clip.mediaId);
+  if (m && m.kind === 'sequence') return renderNestFrame(m, srcAt(clip, T - clip.start), depth);
+  return elementFor(clip.mediaId);
+}
+
+/* raccoglie tutte le clip audio della timeline, appiattendo le sequenze annidate */
+export function collectAudioClips() {
+  const out = [];
+  const add = (tracks, baseStart, baseIn, baseSpeed, depth) => {
+    if (depth > 5) return;
+    for (const t of tracks) {
+      if (t.type === 'audio') {
+        if (t.mute) continue;
+        for (const c of t.clips) {
+          const ms = baseStart + (c.start - baseIn) / baseSpeed;
+          out.push({ trackId: t.id, clip: { ...c, start: ms, speed: (c.speed || 1) * baseSpeed } });
+        }
+      } else {
+        for (const c of t.clips) {
+          const m = store.media(c.mediaId);
+          if (m && m.kind === 'sequence') {
+            const nest = (store.project.nests || []).find(n => n.id === m.nestId);
+            if (nest) add(nest.tracks, baseStart + (c.start - baseIn) / baseSpeed, c.in, (c.speed || 1) * baseSpeed, depth + 1);
+          }
+        }
+      }
+    }
+  };
+  add(store.project.tracks, 0, 0, 1, 0);
+  return out;
+}
+
 /* ----------------- transport ----------------- */
 export function play() {
   if (store.playing) return;
@@ -90,13 +158,8 @@ export function play() {
 
   // sincronizza mute tracce audio
   for (const t of store.audioTracks()) audio.setTrackMuted(t.id, t.mute);
-  // schedula audio
-  const clips = [];
-  for (const t of store.audioTracks()) {
-    if (t.mute) continue;
-    for (const c of t.clips) clips.push({ trackId: t.id, clip: c });
-  }
-  audio.play(clips, bufferFor, store.playhead);
+  // schedula audio (incluse le sequenze annidate, appiattite)
+  audio.play(collectAudioClips(), bufferFor, store.playhead);
   applyDucking();
 
   // avvia gli elementi video attivi
@@ -139,12 +202,7 @@ export function gotoStart() { pause(); seek(0); }
 export function gotoEnd() { pause(); seek(store.duration()); }
 
 function audioReschedule() {
-  const clips = [];
-  for (const t of store.audioTracks()) {
-    if (t.mute) continue;
-    for (const c of t.clips) clips.push({ trackId: t.id, clip: c });
-  }
-  audio.play(clips, bufferFor, store.playhead);
+  audio.play(collectAudioClips(), bufferFor, store.playhead);
   applyDucking();
 }
 
@@ -196,17 +254,7 @@ function renderFrame() {
     if (T >= dur) { store.playhead = dur; pause(); T = dur; }
   }
 
-  comp.clear();
-  if (comp.ok) {
-    // compositing dal basso verso l'alto
-    for (const track of store.videoTracksBottomUp()) {
-      if (track.mute) continue;
-      const trans = store.transitionAt(track, T);
-      if (trans) { drawTransition(track, trans, T); continue; }
-      const clip = store.clipAt(track, T);
-      if (clip) drawClip(clip, T, {});
-    }
-  }
+  composite(T);
 
   // aggiorna UI
   tcDisplay.textContent = tc(store.playhead, store.project.fps);
@@ -215,6 +263,20 @@ function renderFrame() {
   drawVU();
 
   requestAnimationFrame(renderFrame);
+}
+
+/* compositing di un frame al tempo T (estratto per testabilità sincrona) */
+export function composite(T) {
+  comp.clear();
+  nestRenderIdx = 0;   // azzera il pool di compositori per le sequenze annidate
+  if (!comp.ok) return;
+  for (const track of store.videoTracksBottomUp()) {
+    if (track.mute) continue;
+    const trans = store.transitionAt(track, T);
+    if (trans) { drawTransition(track, trans, T); continue; }
+    const clip = store.clipAt(track, T);
+    if (clip) drawClip(clip, T, {});
+  }
 }
 
 /* VU meter stereo a barre con segmenti */
@@ -253,10 +315,12 @@ function alignEl(el, clip, T) {
   }
 }
 
-function drawClip(clip, T, opts) {
-  const el = elementFor(clip.mediaId);
-  if (!el) return;
+function drawClip(clip, T, opts, cmp = comp, depth = 0) {
   const m = store.media(clip.mediaId);
+  let el;
+  if (m && m.kind === 'sequence') el = renderNestFrame(m, srcAt(clip, T - clip.start), depth);
+  else el = elementFor(clip.mediaId);
+  if (!el) return;
   const localT = T - clip.start;
   const P = resolvedParams(clip, localT);
   let o = opts || {};
@@ -282,30 +346,30 @@ function drawClip(clip, T, opts) {
     }
   }
   alignEl(el, clip, T);
-  comp.draw(el, P, o);
+  cmp.draw(el, P, o);
 }
 
 /* rende una transizione reale tra due clip sovrapposte */
-function drawTransition(track, trans, T) {
+function drawTransition(track, trans, T, cmp = comp, depth = 0) {
   const { A, B, p, type } = trans;
-  const elA = elementFor(A.mediaId), elB = elementFor(B.mediaId);
-  if (!elA || !elB) { drawClip(B, T, {}); return; }
+  const elA = resolveEl(A, T, depth), elB = resolveEl(B, T, depth);
+  if (!elA || !elB) { drawClip(B, T, {}, cmp, depth); return; }
   alignEl(elA, A, T); alignEl(elB, B, T);
   const PA = resolvedParams(A, T - A.start), PB = resolvedParams(B, T - B.start);
   const la = lutFor(A), lb = lutFor(B), ga = lggFor(A), gb = lggFor(B), sa = secFor(A), sb = secFor(B);
   const mA = (A.mask && A.mask.type && A.mask.type !== 'none') ? A.mask : null;
   const mB = (B.mask && B.mask.type && B.mask.type !== 'none') ? B.mask : null;
-  const dA = (extra = {}) => comp.draw(elA, PA, { ...extra, ...(la ? { lut: la } : {}), ...(ga ? { lgg: ga } : {}), ...(sa ? { sec: sa } : {}), ...(mA ? { mask: mA } : {}) });
-  const dB = (extra = {}) => comp.draw(elB, PB, { ...extra, ...(lb ? { lut: lb } : {}), ...(gb ? { lgg: gb } : {}), ...(sb ? { sec: sb } : {}), ...(mB ? { mask: mB } : {}) });
+  const dA = (extra = {}) => cmp.draw(elA, PA, { ...extra, ...(la ? { lut: la } : {}), ...(ga ? { lgg: ga } : {}), ...(sa ? { sec: sa } : {}), ...(mA ? { mask: mA } : {}) });
+  const dB = (extra = {}) => cmp.draw(elB, PB, { ...extra, ...(lb ? { lut: lb } : {}), ...(gb ? { lgg: gb } : {}), ...(sb ? { sec: sb } : {}), ...(mB ? { mask: mB } : {}) });
 
   switch (type) {
     case 'dipblack':
-      if (p < 0.5) { dA(); comp.fill(0, 0, 0, p / 0.5); }
-      else { dB(); comp.fill(0, 0, 0, (1 - p) / 0.5); }
+      if (p < 0.5) { dA(); cmp.fill(0, 0, 0, p / 0.5); }
+      else { dB(); cmp.fill(0, 0, 0, (1 - p) / 0.5); }
       break;
     case 'dipwhite':
-      if (p < 0.5) { dA(); comp.fill(1, 1, 1, p / 0.5); }
-      else { dB(); comp.fill(1, 1, 1, (1 - p) / 0.5); }
+      if (p < 0.5) { dA(); cmp.fill(1, 1, 1, p / 0.5); }
+      else { dB(); cmp.fill(1, 1, 1, (1 - p) / 0.5); }
       break;
     case 'wipeleft':
       dA(); dB({ wipe: { dir: [1, 0], edge: p } });

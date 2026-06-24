@@ -2,7 +2,7 @@
    main.js — bootstrap e wiring di tutta l'interfaccia
    ===================================================================== */
 import { store, newProject } from './state.js';
-import { importFiles, renderBin, createTitle, rehydrateFromBlob, rehydrateTitle } from './media.js';
+import { importFiles, renderBin, createTitle, rehydrateFromBlob, rehydrateTitle, createNestFromTimeline, rehydrateSequence } from './media.js';
 import { renderTimeline } from './timeline.js';
 import { renderInspector, syncInspectorValues } from './inspector.js';
 import { startLoop, play, pause, toggle, seek, stepFrame, gotoStart, gotoEnd } from './preview.js';
@@ -78,6 +78,7 @@ document.querySelector('.menu').addEventListener('click', (e) => {
       store.load(newProject()); projName.textContent = store.project.name; toast('Nuovo progetto'); break;
     case 'import': fileInput.click(); break;
     case 'title': createTitle(store.project); toast('Titolo creato — trascinalo in timeline', 'ok'); break;
+    case 'nest': createNestFromTimeline(store.project); break;
     case 'save': io.serverSave(toast); break;
     case 'open': io.serverOpen(toast); break;
     case 'projExport': projectExportChooser(); break;
@@ -373,6 +374,7 @@ startLoop();
   let recovered = 0, missing = 0;
   for (const m of saved.media) {
     if (m.kind === 'title') { rehydrateTitle(m); recovered++; continue; }
+    if (m.kind === 'sequence') { rehydrateSequence(m); recovered++; continue; }
     const blob = await getBlob(m.id);
     if (blob) { await rehydrateFromBlob(m, blob); recovered++; }
     else missing++;
