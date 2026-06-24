@@ -79,6 +79,7 @@ uniform float uSolid; uniform vec3 uColor;
 uniform float uBright, uContrast, uSat, uExposure, uHue, uTemp, uTint;
 uniform float uVignette, uGray, uSepia, uBlur, uSharpen, uOpacity;
 uniform float uWipe; uniform vec2 uWipeDir;
+uniform sampler2D uLUT; uniform float uUseLUT;   // curve RGB (color grading)
 
 vec3 hueRotate(vec3 col, float ang) {
   float c = cos(ang), s = sin(ang);
@@ -128,6 +129,13 @@ void main() {
   c.rgb = mix(vec3(l), c.rgb, 1.0 + uSat);
   // temperatura / tinta
   c.r += uTemp * 0.15; c.b -= uTemp * 0.15; c.g += uTint * 0.15;
+  // curve RGB (color grading) — LUT 256x1
+  c.rgb = clamp(c.rgb, 0.0, 1.0);
+  if (uUseLUT > 0.5) {
+    c.r = texture2D(uLUT, vec2(c.r, 0.5)).r;
+    c.g = texture2D(uLUT, vec2(c.g, 0.5)).g;
+    c.b = texture2D(uLUT, vec2(c.b, 0.5)).b;
+  }
   // bianco e nero
   float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
   c.rgb = mix(c.rgb, vec3(g), uGray);
@@ -166,7 +174,7 @@ export class GLCompositor {
     this.u = {};
     for (const n of ['uScale','uTrans','uRot','uFlip','uAspect','uSlide','uTexel','uSolid','uColor',
       'uBright','uContrast','uSat','uExposure','uHue','uTemp','uTint','uVignette','uGray','uSepia',
-      'uBlur','uSharpen','uOpacity','uWipe','uWipeDir','uTex'])
+      'uBlur','uSharpen','uOpacity','uWipe','uWipeDir','uTex','uLUT','uUseLUT'])
       this.u[n] = gl.getUniformLocation(this.prog, n);
 
     this.tex = gl.createTexture();
@@ -175,6 +183,16 @@ export class GLCompositor {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    // texture LUT (256x1) per le curve, su unità 1
+    this.lutTex = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.lutTex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.activeTexture(gl.TEXTURE0);
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -193,10 +211,21 @@ export class GLCompositor {
     const gl = this.gl; if (!gl || !source) return;
     const ready = source.tagName === 'IMG' ? source.complete : (source.tagName === 'CANVAS' || source.readyState >= 2);
     if (!ready) return;
-    try { gl.bindTexture(gl.TEXTURE_2D, this.tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source); }
+    try { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source); }
     catch (_) { return; }
 
     gl.uniform1i(this.u.uTex, 0);
+    // curve RGB (LUT) per questa clip
+    if (opts.lut) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.lutTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, opts.lut);
+      gl.uniform1i(this.u.uLUT, 1);
+      gl.uniform1f(this.u.uUseLUT, 1);
+      gl.activeTexture(gl.TEXTURE0);
+    } else {
+      gl.uniform1f(this.u.uUseLUT, 0);
+    }
     gl.uniform1f(this.u.uScale, P.scale ?? 1);
     gl.uniform2f(this.u.uTrans, (P.posX ?? 0), -(P.posY ?? 0));
     gl.uniform1f(this.u.uRot, (P.rotation ?? 0) * Math.PI / 180);
@@ -252,4 +281,54 @@ export class GLCompositor {
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(p));
     return p;
   }
+}
+
+/* ===================== Curve RGB (color grading) ===================== */
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+/* interpolazione monotona cubica (Fritsch–Carlson): curva morbida senza overshoot */
+export function makeCurveSampler(pts) {
+  const p = (pts && pts.length ? pts : [{ x: 0, y: 0 }, { x: 1, y: 1 }]).slice().sort((a, b) => a.x - b.x);
+  const n = p.length;
+  if (n === 1) return () => p[0].y;
+  const xs = p.map(q => q.x), ys = p.map(q => q.y);
+  const dx = [], dyn = [], m = [];
+  for (let i = 0; i < n - 1; i++) { dx[i] = xs[i + 1] - xs[i] || 1e-6; dyn[i] = ys[i + 1] - ys[i]; m[i] = dyn[i] / dx[i]; }
+  const t = new Array(n);
+  t[0] = m[0]; t[n - 1] = m[n - 2];
+  for (let i = 1; i < n - 1; i++) t[i] = (m[i - 1] * m[i] <= 0) ? 0 : (m[i - 1] + m[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; }
+    else { const a = t[i] / m[i], b = t[i + 1] / m[i], s = a * a + b * b; if (s > 9) { const tau = 3 / Math.sqrt(s); t[i] = tau * a * m[i]; t[i + 1] = tau * b * m[i]; } }
+  }
+  return (x) => {
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[n - 1]) return ys[n - 1];
+    let i = 0; while (i < n - 1 && x > xs[i + 1]) i++;
+    const h = dx[i], u = (x - xs[i]) / h;
+    const h00 = (1 + 2 * u) * (1 - u) * (1 - u), h10 = u * (1 - u) * (1 - u), h01 = u * u * (3 - 2 * u), h11 = u * u * (u - 1);
+    return h00 * ys[i] + h10 * h * t[i] + h01 * ys[i + 1] + h11 * h * t[i + 1];
+  };
+}
+
+export function isIdentityCurves(c) {
+  if (!c) return true;
+  const idc = (p) => p && p.length === 2 && p[0].x === 0 && p[0].y === 0 && p[1].x === 1 && p[1].y === 1;
+  return idc(c.rgb) && idc(c.r) && idc(c.g) && idc(c.b);
+}
+
+/* costruisce una LUT 256x1 RGBA: per ogni livello applica master (rgb) poi il canale */
+export function buildCurveLUT(curves) {
+  if (!curves || isIdentityCurves(curves)) return null;
+  const fM = makeCurveSampler(curves.rgb);
+  const fR = makeCurveSampler(curves.r), fG = makeCurveSampler(curves.g), fB = makeCurveSampler(curves.b);
+  const lut = new Uint8Array(256 * 4);
+  for (let i = 0; i < 256; i++) {
+    const mv = clamp01(fM(i / 255));
+    lut[i * 4 + 0] = Math.round(clamp01(fR(mv)) * 255);
+    lut[i * 4 + 1] = Math.round(clamp01(fG(mv)) * 255);
+    lut[i * 4 + 2] = Math.round(clamp01(fB(mv)) * 255);
+    lut[i * 4 + 3] = 255;
+  }
+  return lut;
 }

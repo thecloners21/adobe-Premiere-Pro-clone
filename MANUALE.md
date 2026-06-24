@@ -89,6 +89,14 @@ Seleziona una clip: nel pannello **Controllo effetti** trovi tre gruppi.
 
 Muovi gli slider: l'anteprima si aggiorna in tempo reale.
 
+**Curve RGB (color grading):** sotto gli effetti, il gruppo **Curve RGB** mostra
+un editor a curva. Scegli il canale (**RGB** master, **R**, **G**, **B**) e
+modella la curva: **trascina** i punti, **clic** per aggiungerne, **doppio clic**
+per rimuoverli (gli estremi restano fissi in orizzontale). È come le *Curve* di
+Lumetri: alza i mezzitoni per schiarire, crea una "S" per più contrasto, agisci
+sui singoli canali per virare il colore. *Reset canale* / *Reset tutto* azzerano.
+Le curve si vedono in anteprima e nell'export browser.
+
 ---
 
 ## 7. Keyframe (animazione degli effetti)

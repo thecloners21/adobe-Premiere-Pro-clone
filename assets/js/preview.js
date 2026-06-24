@@ -5,8 +5,20 @@
 import { store, tc, resolvedParams } from './state.js';
 import { runtime, titleAnimOpts, renderTitleCanvas } from './media.js';
 import { audio } from './audio.js';
-import { GLCompositor } from './effects.js';
+import { GLCompositor, buildCurveLUT } from './effects.js';
 import { seekExact } from './webcodecs.js';
+
+/* cache della LUT curve per clip (ricostruita solo quando cambiano le curve) */
+const lutCache = new WeakMap();
+function lutFor(clip) {
+  if (!clip || !clip.curves) return null;
+  const key = JSON.stringify(clip.curves);
+  const e = lutCache.get(clip);
+  if (e && e.key === key) return e.lut;
+  const lut = buildCurveLUT(clip.curves);
+  lutCache.set(clip, { key, lut });
+  return lut;
+}
 
 export const THEAD_W = 150;
 
@@ -222,6 +234,8 @@ function drawClip(clip, T, opts) {
   const localT = T - clip.start;
   const P = resolvedParams(clip, localT);
   let o = opts || {};
+  const lut = lutFor(clip);
+  if (lut) o = { ...o, lut };
   // animazioni titolo
   if (m && m.kind === 'title' && m.title) {
     const ao = titleAnimOpts(m.title, localT, clip.out - clip.in);
@@ -247,33 +261,36 @@ function drawTransition(track, trans, T) {
   if (!elA || !elB) { drawClip(B, T, {}); return; }
   alignEl(elA, A, T); alignEl(elB, B, T);
   const PA = resolvedParams(A, T - A.start), PB = resolvedParams(B, T - B.start);
+  const la = lutFor(A), lb = lutFor(B);
+  const dA = (extra = {}) => comp.draw(elA, PA, la ? { ...extra, lut: la } : extra);
+  const dB = (extra = {}) => comp.draw(elB, PB, lb ? { ...extra, lut: lb } : extra);
 
   switch (type) {
     case 'dipblack':
-      if (p < 0.5) { comp.draw(elA, PA, {}); comp.fill(0, 0, 0, p / 0.5); }
-      else { comp.draw(elB, PB, {}); comp.fill(0, 0, 0, (1 - p) / 0.5); }
+      if (p < 0.5) { dA(); comp.fill(0, 0, 0, p / 0.5); }
+      else { dB(); comp.fill(0, 0, 0, (1 - p) / 0.5); }
       break;
     case 'dipwhite':
-      if (p < 0.5) { comp.draw(elA, PA, {}); comp.fill(1, 1, 1, p / 0.5); }
-      else { comp.draw(elB, PB, {}); comp.fill(1, 1, 1, (1 - p) / 0.5); }
+      if (p < 0.5) { dA(); comp.fill(1, 1, 1, p / 0.5); }
+      else { dB(); comp.fill(1, 1, 1, (1 - p) / 0.5); }
       break;
     case 'wipeleft':
-      comp.draw(elA, PA, {}); comp.draw(elB, PB, { wipe: { dir: [1, 0], edge: p } });
+      dA(); dB({ wipe: { dir: [1, 0], edge: p } });
       break;
     case 'wiperight':
-      comp.draw(elA, PA, {}); comp.draw(elB, PB, { wipe: { dir: [-1, 0], edge: p - 1 } });
+      dA(); dB({ wipe: { dir: [-1, 0], edge: p - 1 } });
       break;
     case 'slideleft':
-      comp.draw(elA, PA, {}); comp.draw(elB, PB, { slide: [(1 - p) * 2, 0] });
+      dA(); dB({ slide: [(1 - p) * 2, 0] });
       break;
     case 'slideright':
-      comp.draw(elA, PA, {}); comp.draw(elB, PB, { slide: [-(1 - p) * 2, 0] });
+      dA(); dB({ slide: [-(1 - p) * 2, 0] });
       break;
     case 'push':
-      comp.draw(elA, PA, { slide: [-p * 2, 0] }); comp.draw(elB, PB, { slide: [(1 - p) * 2, 0] });
+      dA({ slide: [-p * 2, 0] }); dB({ slide: [(1 - p) * 2, 0] });
       break;
     default: // dissolve
-      comp.draw(elA, PA, {}); comp.draw(elB, PB, { alpha: p });
+      dA(); dB({ alpha: p });
   }
 }
 

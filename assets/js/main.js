@@ -39,7 +39,7 @@ store.on((reason) => {
 /* ---------- autosave locale (persistenza al refresh) ---------- */
 let autosaveTimer;
 store.on((reason) => {
-  if (!['clips', 'media', 'inspector', 'load'].includes(reason)) return;
+  if (!['clips', 'media', 'inspector', 'load', 'touch'].includes(reason)) return;
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(() => saveProjectLocal(io.serializable(store.project)), 600);
 });

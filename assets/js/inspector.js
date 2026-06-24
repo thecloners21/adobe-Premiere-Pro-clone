@@ -5,6 +5,7 @@
 import { store, tc, evalParam, evalGain, EASINGS } from './state.js';
 import { FX_PARAMS, FX_GROUPS, TRANSITIONS } from './effects.js';
 import { updateTitle, TITLE_FONTS, TITLE_STYLES, TITLE_ANIMS } from './media.js';
+import { mountCurveEditor } from './curveeditor.js';
 
 const box = document.getElementById('inspector');
 
@@ -27,12 +28,17 @@ export function renderInspector() {
   if (track.type === 'video') {
     for (const g of FX_GROUPS) html += fxGroup(clip, g);
     html += flipRow(clip);
+    html += `<div class="fx-group"><div class="fx-title">Curve RGB</div><div id="curveMount"></div></div>`;
     html += transitionRow(clip);
   } else {
     html += audioGroup(clip);
   }
   box.innerHTML = html;
   wire(clip, m, track);
+  if (track.type === 'video') {
+    const cm = box.querySelector('#curveMount');
+    if (cm) mountCurveEditor(cm, clip);
+  }
 }
 
 /* gruppo di effetti con slider + diamante keyframe */

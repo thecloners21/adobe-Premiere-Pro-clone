@@ -26,7 +26,13 @@ export function newProject(name = 'Progetto senza titolo') {
   };
 }
 
-/* clip: {id, mediaId, start, in, out, gain, fadeIn, fadeOut, transType, fx{...}, kf{...}} */
+/* curve RGB di default (identità) */
+export function defaultCurves() {
+  const id = () => [{ x: 0, y: 0 }, { x: 1, y: 1 }];
+  return { rgb: id(), r: id(), g: id(), b: id() };
+}
+
+/* clip: {id, mediaId, start, in, out, gain, fadeIn, fadeOut, transType, fx{...}, kf{...}, curves{...}} */
 export function makeClip(media, start, trackType) {
   const dur = media.duration || (media.kind === 'image' || media.kind === 'title' ? 5 : 0);
   return {
@@ -43,6 +49,7 @@ export function makeClip(media, start, trackType) {
     fx: defaultFx(),
     kf: {},                   // keyframe per parametro: { key: [{t,v}, ...] } (t = secondi dall'inizio clip)
     ease: {},                 // easing per parametro keyframato: { key: 'linear'|'in'|'out'|'inout'|'hold' }
+    curves: defaultCurves(),  // curve RGB di color grading
   };
 }
 
@@ -185,7 +192,7 @@ class Store {
         const cEnd = c.start + (c.out - c.in);
         if (t0 > c.start + 0.02 && t0 < cEnd - 0.02) {
           const cutSrc = c.in + (t0 - c.start);
-          const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})), ease: { ...(c.ease || {}) } };
+          const right = { ...c, id: uid('c'), fx: { ...c.fx }, kf: JSON.parse(JSON.stringify(c.kf || {})), ease: { ...(c.ease || {}) }, curves: JSON.parse(JSON.stringify(c.curves || {})) };
           right.start = t0; right.in = cutSrc;
           c.out = cutSrc;
           t.clips.push(right);
